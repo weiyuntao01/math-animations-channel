@@ -1,0 +1,22 @@
+# Manim configuration
+manim:
+  quality: high
+  fps: 60
+  resolution: "1920x1080"
+
+# Project configuration
+project:
+  default_font: "Arial"
+  color_scheme:
+    background: "#0f0f0f"
+    primary: "#3b82f6"
+    secondary: "#f59e0b"
+    success: "#10b981"
+    error: "#ef4444"
+
+# Publishing configuration
+publishing:
+  platforms:
+    - youtube
+    - bilibili
+    - douyin

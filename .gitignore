@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv
+
+# Manim
+media/
+videos/
+images/
+texts/
+Tex/
+partial_movie_files/
+*.mp4
+*.mov
+*.gif
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Project specific
+output/videos/*.mp4
+output/videos/*.mov
+temp/
+*.log
+.cache/
+
+# Secrets
+.env
+credentials.json
