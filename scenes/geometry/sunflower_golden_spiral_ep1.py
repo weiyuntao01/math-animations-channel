@@ -336,24 +336,35 @@ class SunflowerGoldenSpiralChinese(Scene):
         # 下一集，我们将探索更多隐藏在大自然中的数学奇迹。
         # 如果你喜欢这个视频，请点赞订阅，我们下期再见！
         
-        # 总结信息
-        summary_1 = Text("大自然的数学智慧", font_size=48, color=GOLD)
-        summary_2 = Text("黄金角 × 斐波那契数列 = 完美螺旋", font_size=32, color=YELLOW)
-        summary_3 = Text("从向日葵到银河系，数学无处不在", font_size=28, color=WHITE)
-        summary = VGroup(summary_1, summary_2, summary_3).arrange(DOWN, buff=0.6)
+        # 总结
+        summary_lines = [
+            Text("向日葵的螺旋密码", font_size=36, color=WHITE),
+            Text("揭示了大自然的数学智慧", font_size=36, color=WHITE),
+            Text("黄金角与斐波那契数列", font_size=36, color=WHITE),
+            Text("创造出最完美的生长模式", font_size=42, color=GOLD)
+        ]
+        summary = VGroup(*summary_lines).arrange(DOWN, buff=0.5)
         
-        self.play(Write(summary[0]), run_time=2)
-        self.play(FadeIn(summary[1], shift=UP), run_time=1.5)
-        self.play(FadeIn(summary[2], shift=UP), run_time=1.5)
+        for line in summary_lines:
+            self.play(Write(line), run_time=1)
+        
         self.wait(3)
-        
         self.play(FadeOut(summary))
         
-        # 订阅提醒
-        subscribe_1 = Text("喜欢请三连支持！", font_size=36, color=RED)
-        subscribe_2 = Text("下期预告：分形几何的奇妙世界", font_size=28, color=YELLOW)
-        subscribe_group = VGroup(subscribe_1, subscribe_2).arrange(DOWN, buff=0.5)
+        # 下期预告
+        next_episode = VGroup(
+            Text("下期预告", font_size=36, color=YELLOW),
+            Text("斐波那契与兔子问题", font_size=32, color=WHITE),
+            Text("探索数列的起源故事", font_size=28, color=WHITE)
+        ).arrange(DOWN, buff=0.5)
         
-        self.play(Write(subscribe_group[0]), run_time=1.5)
-        self.play(FadeIn(subscribe_group[1], shift=UP), run_time=1)
+        self.play(Write(next_episode[0]), run_time=1)
+        self.play(FadeIn(next_episode[1], shift=UP), run_time=1)
+        self.play(FadeIn(next_episode[2], shift=UP), run_time=1)
+        
+        # 订阅提醒
+        subscribe = Text("喜欢请三连支持！", font_size=32, color=RED)
+        subscribe.next_to(next_episode, DOWN, buff=1)
+        
+        self.play(Write(subscribe))
         self.wait(3)

@@ -1,0 +1,25 @@
+{
+    "summary": {
+        "total_scenes": 2,
+        "success": 2,
+        "failed": 0,
+        "total_duration": 465.67541694641113,
+        "timestamp": "2025-07-25T22:24:42.853978"
+    },
+    "details": [
+        {
+            "scene": "EP01_向日葵螺旋",
+            "quality": "high",
+            "status": "success",
+            "duration": 194.38825249671936,
+            "timestamp": "2025-07-25T22:20:11.566800"
+        },
+        {
+            "scene": "EP02_斐波那契兔子",
+            "quality": "high",
+            "status": "success",
+            "duration": 271.28217339515686,
+            "timestamp": "2025-07-25T22:24:42.850976"
+        }
+    ]
+}
