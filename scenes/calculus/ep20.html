@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bézier 曲线 · 控制点的艺术</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #0a0a15 0%, #0f0f20 50%, #0a0a15 100%);
+            overflow: hidden; position: relative; height: 100vh;
+        }
+        #canvas { display: block; }
+        
+        .title-area {
+            position: absolute; top: 40px; left: 50%; transform: translateX(-50%);
+            text-align: center; z-index: 100; pointer-events: none;
+        }
+        .main-title {
+            color: white; font-size: 38px; font-weight: 500; letter-spacing: 4px;
+            text-shadow: 0 0 40px rgba(100, 150, 255, 0.7), 0 0 20px rgba(80, 120, 200, 0.5);
+            margin-bottom: 12px;
+        }
+        .formula {
+            color: rgba(255, 255, 255, 0.9); font-size: 18px; font-weight: 400;
+            font-family: 'Georgia', serif;
+            text-shadow: 0 0 15px rgba(100, 150, 255, 0.4);
+            line-height: 1.8;
+        }
+        
+        .stats-bar {
+            position: absolute; bottom: 0; left: 0; right: 0; height: 90px;
+            background: linear-gradient(to top, rgba(10, 10, 21, 0.9), transparent);
+            display: flex; justify-content: center; align-items: center;
+            gap: 60px; z-index: 100; pointer-events: none;
+        }
+        .stat-item { text-align: center; }
+        .stat-label {
+            color: rgba(150, 180, 255, 0.7); font-size: 13px;
+            margin-bottom: 6px; letter-spacing: 1px;
+        }
+        .stat-value {
+            color: #6b9dff; font-size: 26px; font-weight: 300;
+            text-shadow: 0 0 15px rgba(100, 150, 255, 0.6);
+            font-family: 'Courier New', monospace;
+        }
+        
+        .wisdom {
+            position: absolute; left: 50%; bottom: 110px; transform: translateX(-50%);
+            max-width: 85vw; white-space: nowrap; overflow: hidden;
+            color: rgba(255, 255, 255, 0.98); font-size: 19px; font-weight: 500;
+            line-height: 1.6; letter-spacing: 0.5px;
+            -webkit-text-stroke: 0.5px rgba(100, 150, 255, 0.3);
+            text-shadow:
+                0 0 2px rgba(100, 150, 255, 0.5),
+                0 0 12px rgba(100, 150, 255, 0.3),
+                0 2px 10px rgba(0, 0, 0, 0.8);
+            text-align: center; user-select: none; pointer-events: none;
+            z-index: 9999; padding: 0 40px;
+            transition: opacity 1.5s ease;
+        }
+        
+        @media (max-width: 768px) {
+            .main-title { font-size: 28px; }
+            .formula { font-size: 16px; }
+            .stats-bar { gap: 30px; height: 80px; }
+            .stat-value { font-size: 20px; }
+            .wisdom { font-size: 15px; bottom: 95px; }
+        }
+    </style>
+</head>
+<body>
+    <canvas id="canvas"></canvas>
+
+    <div class="title-area">
+        <div class="main-title">Bézier 曲线</div>
+        <div class="formula">
+            B(t) = Σ<sub>i=0</sub><sup>n</sup> (ⁿCᵢ)(1-t)<sup>n-i</sup>t<sup>i</sup>P<sub>i</sub><br>
+            其中 t ∈ [0, 1]
+        </div>
+    </div>
+
+    <div class="stats-bar">
+        <div class="stat-item">
+            <div class="stat-label">曲线阶数</div>
+            <div class="stat-value" id="curveOrder">3</div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-label">控制点数</div>
+            <div class="stat-value" id="controlPoints">4</div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-label">参数 t</div>
+            <div class="stat-value" id="tValue">0.50</div>
+        </div>
+    </div>
+
+    <div class="wisdom"></div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        let animationTime = 0;
+        let currentT = 0;
+        
+        // Bézier 曲线类
+        class BezierCurve {
+            constructor(controlPoints) {
+                this.controlPoints = controlPoints;
+                this.n = controlPoints.length - 1;
+            }
+            
+            // 二项式系数
+            binomial(n, k) {
+                if (k < 0 || k > n) return 0;
+                if (k === 0 || k === n) return 1;
+                let result = 1;
+                for (let i = 1; i <= k; i++) {
+                    result = result * (n - i + 1) / i;
+                }
+                return result;
+            }
+            
+            // 计算曲线上的点
+            getPoint(t) {
+                let x = 0, y = 0;
+                for (let i = 0; i <= this.n; i++) {
+                    const coefficient = this.binomial(this.n, i) * Math.pow(1 - t, this.n - i) * Math.pow(t, i);
+                    x += coefficient * this.controlPoints[i].x;
+                    y += coefficient * this.controlPoints[i].y;
+                }
+                return { x, y };
+            }
+            
+            // De Casteljau 算法的中间点（用于可视化构造过程）
+            getDeCasteljauPoints(t) {
+                const levels = [];
+                levels.push([...this.controlPoints]);
+                
+                for (let level = 1; level <= this.n; level++) {
+                    const prevLevel = levels[level - 1];
+                    const currentLevel = [];
+                    
+                    for (let i = 0; i < prevLevel.length - 1; i++) {
+                        const p1 = prevLevel[i];
+                        const p2 = prevLevel[i + 1];
+                        currentLevel.push({
+                            x: (1 - t) * p1.x + t * p2.x,
+                            y: (1 - t) * p1.y + t * p2.y
+                        });
+                    }
+                    levels.push(currentLevel);
+                }
+                
+                return levels;
+            }
+        }
+        
+        // 生成动态控制点
+        function generateControlPoints(time) {
+            const cx = canvas.width / 2;
+            const cy = canvas.height / 2;
+            const radius = Math.min(canvas.width, canvas.height) * 0.3;
+            
+            // 4 个控制点形成优雅的形状
+            const points = [];
+            for (let i = 0; i < 4; i++) {
+                const angle = (time * 0.3 + i * Math.PI / 2) + Math.sin(time * 0.2 + i) * 0.5;
+                const r = radius * (0.8 + Math.sin(time * 0.15 + i * 1.5) * 0.2);
+                points.push({
+                    x: cx + Math.cos(angle) * r,
+                    y: cy + Math.sin(angle) * r
+                });
+            }
+            
+            return points;
+        }
+        
+        let bezier;
+        
+        // 绘制背景
+        function drawBackground() {
+            ctx.fillStyle = 'rgba(10, 10, 21, 0.3)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+        
+        // 绘制控制多边形
+        function drawControlPolygon(points) {
+            ctx.save();
+            ctx.strokeStyle = 'rgba(100, 150, 255, 0.3)';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([8, 8]);
+            
+            ctx.beginPath();
+            points.forEach((point, i) => {
+                if (i === 0) ctx.moveTo(point.x, point.y);
+                else ctx.lineTo(point.x, point.y);
+            });
+            ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.restore();
+        }
+        
+        // 绘制控制点
+        function drawControlPoints(points) {
+            ctx.save();
+            points.forEach((point, i) => {
+                // 外圈光晕
+                const gradient = ctx.createRadialGradient(point.x, point.y, 0, point.x, point.y, 20);
+                gradient.addColorStop(0, 'rgba(100, 150, 255, 0.4)');
+                gradient.addColorStop(1, 'rgba(100, 150, 255, 0)');
+                ctx.fillStyle = gradient;
+                ctx.beginPath();
+                ctx.arc(point.x, point.y, 20, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // 控制点本身
+                ctx.fillStyle = 'rgba(100, 150, 255, 0.9)';
+                ctx.shadowBlur = 15;
+                ctx.shadowColor = 'rgba(100, 150, 255, 0.8)';
+                ctx.beginPath();
+                ctx.arc(point.x, point.y, 8, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // 标签
+                ctx.shadowBlur = 0;
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+                ctx.font = 'bold 14px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(`P${i}`, point.x, point.y - 20);
+            });
+            ctx.restore();
+        }
+        
+        // 绘制 De Casteljau 构造过程
+        function drawDeCasteljauConstruction(levels, t) {
+            ctx.save();
+            
+            // 绘制各层级的连线和点
+            for (let level = 1; level < levels.length; level++) {
+                const points = levels[level];
+                const alpha = 0.6 - level * 0.15;
+                const size = 6 - level * 1;
+                
+                // 连线
+                ctx.strokeStyle = `rgba(100, 200, 255, ${alpha * 0.5})`;
+                ctx.lineWidth = 1.5;
+                ctx.beginPath();
+                points.forEach((point, i) => {
+                    if (i === 0) ctx.moveTo(point.x, point.y);
+                    else ctx.lineTo(point.x, point.y);
+                });
+                ctx.stroke();
+                
+                // 中间点
+                points.forEach(point => {
+                    ctx.fillStyle = `rgba(100, 200, 255, ${alpha})`;
+                    ctx.beginPath();
+                    ctx.arc(point.x, point.y, size, 0, Math.PI * 2);
+                    ctx.fill();
+                });
+            }
+            
+            // 高亮当前点
+            const finalPoint = levels[levels.length - 1][0];
+            const gradient = ctx.createRadialGradient(finalPoint.x, finalPoint.y, 0, finalPoint.x, finalPoint.y, 30);
+            gradient.addColorStop(0, 'rgba(255, 255, 255, 0.9)');
+            gradient.addColorStop(0.3, 'rgba(100, 200, 255, 0.6)');
+            gradient.addColorStop(1, 'rgba(100, 200, 255, 0)');
+            ctx.fillStyle = gradient;
+            ctx.beginPath();
+            ctx.arc(finalPoint.x, finalPoint.y, 30, 0, Math.PI * 2);
+            ctx.fill();
+            
+            ctx.fillStyle = '#fff';
+            ctx.shadowBlur = 20;
+            ctx.shadowColor = 'rgba(100, 200, 255, 0.8)';
+            ctx.beginPath();
+            ctx.arc(finalPoint.x, finalPoint.y, 10, 0, Math.PI * 2);
+            ctx.fill();
+            
+            ctx.restore();
+        }
+        
+        // 绘制完整的 Bézier 曲线
+        function drawBezierCurve(bezier, currentT) {
+            ctx.save();
+            
+            // 绘制整条曲线的路径（半透明）
+            ctx.strokeStyle = 'rgba(100, 180, 255, 0.4)';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            for (let i = 0; i <= 100; i++) {
+                const t = i / 100;
+                const point = bezier.getPoint(t);
+                if (i === 0) ctx.moveTo(point.x, point.y);
+                else ctx.lineTo(point.x, point.y);
+            }
+            ctx.stroke();
+            
+            // 绘制已经绘制的部分（高亮）
+            ctx.strokeStyle = 'rgba(100, 200, 255, 0.9)';
+            ctx.lineWidth = 4;
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = 'rgba(100, 200, 255, 0.6)';
+            ctx.beginPath();
+            const steps = Math.floor(currentT * 100);
+            for (let i = 0; i <= steps; i++) {
+                const t = i / 100;
+                const point = bezier.getPoint(t);
+                if (i === 0) ctx.moveTo(point.x, point.y);
+                else ctx.lineTo(point.x, point.y);
+            }
+            ctx.stroke();
+            
+            ctx.restore();
+        }
+        
+        // 动画循环
+        function animate() {
+            try {
+                drawBackground();
+                animationTime += 0.016;
+                
+                // 每 8 秒重新生成控制点
+                if (Math.floor(animationTime / 8) !== Math.floor((animationTime - 0.016) / 8)) {
+                    const controlPoints = generateControlPoints(animationTime);
+                    bezier = new BezierCurve(controlPoints);
+                    currentT = 0;
+                }
+                
+                // 如果还没有 bezier，初始化
+                if (!bezier) {
+                    const controlPoints = generateControlPoints(animationTime);
+                    bezier = new BezierCurve(controlPoints);
+                }
+                
+                // t 参数从 0 到 1 循环
+                currentT = ((animationTime % 8) / 8);
+                
+                // 绘制
+                drawControlPolygon(bezier.controlPoints);
+                drawBezierCurve(bezier, currentT);
+                
+                // De Casteljau 构造过程
+                const levels = bezier.getDeCasteljauPoints(currentT);
+                drawDeCasteljauConstruction(levels, currentT);
+                
+                drawControlPoints(bezier.controlPoints);
+                
+                // 更新显示
+                document.getElementById('curveOrder').textContent = bezier.n;
+                document.getElementById('controlPoints').textContent = bezier.n + 1;
+                document.getElementById('tValue').textContent = currentT.toFixed(2);
+                
+                requestAnimationFrame(animate);
+            } catch (error) {
+                console.error('Animation error:', error);
+                requestAnimationFrame(animate);
+            }
+        }
+        
+        // 智慧语录系统
+        const wisdoms = [
+            "曲线由控制点塑造，人生由关键选择定义。",
+            "参数 t 从 0 到 1，如同时间的流逝。",
+            "控制点不在曲线上，却决定曲线的走向。",
+            "优雅的曲线，源于精心的布局。",
+            "De Casteljau 算法：简单的递归，创造复杂的美。",
+            "起点与终点必经过，中间点引导方向。",
+            "数学之美：少数参数，无限可能。",
+            "Bézier 曲线：设计师手中的数学画笔。",
+            "凸包性质：曲线永远在控制点围成的区域内。",
+            "平滑过渡，是计算与艺术的完美结合。"
+        ];
+
+        const wisdomDiv = document.querySelector('.wisdom');
+        let wisdomIndex = Math.floor(Math.random() * wisdoms.length);
+
+        function fitWisdomToOneLine() {
+            const padding = 80;
+            const maxWidth = window.innerWidth - padding;
+            const base = window.innerWidth < 768 ? 19 : 22;
+            const min = window.innerWidth < 768 ? 13 : 15;
+            let size = base;
+            wisdomDiv.style.fontSize = size + 'px';
+            while (wisdomDiv.scrollWidth > maxWidth && size > min) {
+                size -= 1;
+                wisdomDiv.style.fontSize = size + 'px';
+            }
+        }
+
+        function setWisdomText(text) {
+            wisdomDiv.style.fontSize = '';
+            wisdomDiv.textContent = text;
+            fitWisdomToOneLine();
+        }
+
+        function fadeIn() {
+            requestAnimationFrame(() => { wisdomDiv.style.opacity = 1; });
+        }
+
+        function fadeOut(callback) {
+            wisdomDiv.style.opacity = 0;
+            setTimeout(callback, 1000);
+        }
+
+        wisdomDiv.style.opacity = 0;
+        setTimeout(() => {
+            setWisdomText(wisdoms[wisdomIndex]);
+            fadeIn();
+        }, 1200);
+
+        function rotateWisdom() {
+            fadeOut(() => {
+                wisdomIndex = (wisdomIndex + 1) % wisdoms.length;
+                setWisdomText(wisdoms[wisdomIndex]);
+                fadeIn();
+            });
+        }
+
+        setInterval(rotateWisdom, 6000);
+        window.addEventListener('resize', () => { fitWisdomToOneLine(); });
+
+        // 启动
+        ctx.fillStyle = 'rgba(10, 10, 21, 1)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        animate();
+    </script>
+</body>
+</html>

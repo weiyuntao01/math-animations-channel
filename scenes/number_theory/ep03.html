@@ -1,0 +1,687 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EP03 - 佩尔方程：无穷楼梯逼近 √2</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #0a0a1f 0%, #1a0a2e 50%, #2a0a3e 100%);
+            overflow: hidden;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        .info-container {
+            position: fixed;
+            top: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            text-align: center;
+            z-index: 10;
+            color: white;
+            text-shadow: 0 0 20px rgba(255, 255, 255, 0.5);
+        }
+
+        .title {
+            font-size: 2.5em;
+            font-weight: bold;
+            margin-bottom: 10px;
+            background: linear-gradient(45deg, #00ffff, #ff00ff, #ffff00);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: gradient-shift 3s ease infinite;
+        }
+
+        .subtitle {
+            font-size: 1.2em;
+            color: #88ccff;
+            margin-bottom: 18px;
+        }
+
+        .stats {
+            display: flex;
+            gap: 30px;
+            justify-content: center;
+            font-size: 1em;
+            color: #ccccff;
+        }
+
+        .stat-item {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 10px 20px;
+            border-radius: 10px;
+            backdrop-filter: blur(10px);
+        }
+
+        .stat-label {
+            font-size: 0.9em;
+            color: #9fc9ff;
+        }
+
+        .stat-value {
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #00ffff;
+        }
+
+        .note {
+            margin-top: 14px;
+            font-size: 0.95em;
+            color: #ffe6ff;
+        }
+
+        .quote {
+            position: absolute;
+            left: 50%;
+            bottom: 70px;
+            transform: translateX(-50%);
+            max-width: 85vw;
+            white-space: nowrap;
+            overflow: hidden;
+            color: rgba(255, 255, 255, 0.98);
+            font-size: 36px;
+            font-weight: 500;
+            line-height: 1.6;
+            letter-spacing: 0.5px;
+            -webkit-text-stroke: 0.5px rgba(138, 43, 226, 0.3);
+            text-shadow:
+                0 0 2px rgba(138, 43, 226, 0.6),
+                0 0 12px rgba(138, 43, 226, 0.4),
+                0 2px 10px rgba(0, 0, 0, 0.8);
+            text-align: center;
+            user-select: none;
+            pointer-events: none;
+            z-index: 9999;
+            padding: 0 40px;
+            transition: opacity 1.5s ease;
+        }
+
+        @keyframes gradient-shift {
+
+            0%,
+            100% {
+                filter: hue-rotate(0deg);
+            }
+
+            50% {
+                filter: hue-rotate(30deg);
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <canvas id="canvas"></canvas>
+
+    <div class="info-container">
+        <div class="title">佩尔方程：无穷楼梯逼近 √2</div>
+        <div class="subtitle" id="rangeInfo">等待第一阶解出现…</div>
+        <div class="stats">
+            <div class="stat-item">
+                <div class="stat-label">已展示解</div>
+                <div class="stat-value" id="solutionCount">0</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-label">当前 x</div>
+                <div class="stat-value" id="currentX">-</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-label">当前 y</div>
+                <div class="stat-value" id="currentY">-</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-label">斜率误差 |x/y - √2|</div>
+                <div class="stat-value" id="currentError">-</div>
+            </div>
+        </div>
+        <div class="note" id="insightText">屏幕中心的双曲线：x² - 2y² = 1。</div>
+    </div>
+
+    <div class="quote"></div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+
+        const stats = {
+            rangeInfo: document.getElementById('rangeInfo'),
+            count: document.getElementById('solutionCount'),
+            x: document.getElementById('currentX'),
+            y: document.getElementById('currentY'),
+            error: document.getElementById('currentError'),
+            insight: document.getElementById('insightText')
+        };
+
+        const sqrt2 = Math.SQRT2;
+
+        const plane = {
+            scale: 1,
+            originX: 0,
+            originY: 0,
+            maxX: 1,
+            maxY: 1
+        };
+
+        const pellSolutions = [];
+        (function generateSolutions() {
+            let x = 3;
+            let y = 2;
+            for (let i = 0; i < 8; i++) {
+                pellSolutions.push({
+                    index: i + 1,
+                    x,
+                    y,
+                    ratio: x / y,
+                    error: Math.abs(x / y - sqrt2)
+                });
+                const nextX = x * 3 + y * 4;
+                const nextY = x * 2 + y * 3;
+                x = nextX;
+                y = nextY;
+            }
+            plane.maxX = Math.max(...pellSolutions.map(p => p.x)) * 1.05;
+            plane.maxY = Math.max(...pellSolutions.map(p => p.y)) * 1.05;
+        })();
+
+        const particles = [];
+        const shockwaves = [];
+        const floaters = [];
+
+        let solutionsShown = 0;
+        let hoveredSolution = null;
+        let lastReveal = 0;
+        const revealInterval = 5200;
+        let lastTime = 0;
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            updatePlane();
+        }
+
+        function updatePlane() {
+            const padding = Math.min(canvas.width, canvas.height) * 0.12;
+            const usableWidth = canvas.width - padding * 2;
+            const usableHeight = canvas.height - padding * 2;
+            plane.scale = Math.min(usableWidth / plane.maxX, usableHeight / plane.maxY);
+            const remainingW = canvas.width - plane.scale * plane.maxX;
+            const remainingH = canvas.height - plane.scale * plane.maxY;
+            plane.originX = remainingW / 2;
+            plane.originY = canvas.height - remainingH / 2;
+        }
+
+        function mapPoint(x, y) {
+            return {
+                x: plane.originX + x * plane.scale,
+                y: plane.originY - y * plane.scale
+            };
+        }
+
+        window.addEventListener('resize', () => {
+            resizeCanvas();
+            fitSubtitleToOneLine();
+        });
+        resizeCanvas();
+
+        function drawBackground(time) {
+            const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+            gradient.addColorStop(0, 'rgba(12, 10, 35, 0.92)');
+            gradient.addColorStop(1, 'rgba(22, 10, 45, 0.88)');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            const nebulaGradient = ctx.createRadialGradient(
+                canvas.width * 0.65,
+                canvas.height * 0.35,
+                40,
+                canvas.width * 0.55,
+                canvas.height * 0.4,
+                Math.max(canvas.width, canvas.height) * 0.7
+            );
+            const hueShift = Math.sin(time * 0.0002) * 40;
+            nebulaGradient.addColorStop(0, `rgba(30, 40, 120, 0.45)`);
+            nebulaGradient.addColorStop(0.5, `rgba(80, ${140 + hueShift}, 180, 0.25)`);
+            nebulaGradient.addColorStop(1, 'rgba(10, 15, 35, 0.65)');
+            ctx.fillStyle = nebulaGradient;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+
+        function drawLatticePulseGrid(time) {
+            ctx.save();
+            ctx.globalCompositeOperation = 'screen';
+            const pulse = Math.sin(time * 0.001) * 0.5 + 0.5;
+            ctx.strokeStyle = `rgba(110, 150, 255, ${0.09 + pulse * 0.15})`;
+            ctx.lineWidth = 1;
+
+            const stepX = plane.maxX / 14;
+            const stepY = plane.maxY / 14;
+
+            ctx.beginPath();
+            for (let x = 0; x <= plane.maxX; x += stepX) {
+                const a = mapPoint(x, 0);
+                const b = mapPoint(x, plane.maxY);
+                ctx.moveTo(a.x, a.y);
+                ctx.lineTo(b.x, b.y);
+            }
+
+            for (let y = 0; y <= plane.maxY; y += stepY) {
+                const a = mapPoint(0, y);
+                const b = mapPoint(plane.maxX, y);
+                ctx.moveTo(a.x, a.y);
+                ctx.lineTo(b.x, b.y);
+            }
+            ctx.stroke();
+            ctx.restore();
+        }
+
+        function drawNumberSpiralCollider(time) {
+            ctx.save();
+            const origin = mapPoint(0, 0);
+            ctx.translate(origin.x, origin.y);
+            ctx.globalCompositeOperation = 'lighter';
+
+            const angle = Math.atan(sqrt2);
+            const maxRadius = plane.scale * plane.maxX * 0.9;
+            const sweep = (Math.sin(time * 0.0006) * 0.5 + 0.5) * Math.PI * 2;
+
+            ctx.strokeStyle = 'rgba(180, 140, 255, 0.28)';
+            ctx.lineWidth = 1.4 + Math.sin(time * 0.001) * 0.6;
+            ctx.beginPath();
+            ctx.arc(0, 0, maxRadius, 0, sweep);
+            ctx.stroke();
+
+            for (let k = -1; k <= 1; k++) {
+                const offset = 0.05 * k + Math.sin(time * 0.0009 + k) * 0.02;
+                const currentAngle = angle + offset;
+                ctx.strokeStyle = `rgba(120, 220, 255, ${0.18 + 0.12 * Math.sin(time * 0.0012 + k)})`;
+                ctx.beginPath();
+                ctx.moveTo(0, 0);
+                ctx.lineTo(Math.cos(currentAngle) * maxRadius, -Math.sin(currentAngle) * maxRadius);
+                ctx.stroke();
+            }
+
+            ctx.restore();
+        }
+
+        function drawHyperbola() {
+            ctx.save();
+            ctx.strokeStyle = 'rgba(255, 195, 120, 0.55)';
+            ctx.lineWidth = 1.4;
+
+            ctx.beginPath();
+            let started = false;
+            const step = plane.maxX / 320;
+            for (let x = 1; x <= plane.maxX; x += step) {
+                const ySquared = (x * x - 1) / 2;
+                if (ySquared <= 0) continue;
+                const y = Math.sqrt(ySquared);
+                if (y > plane.maxY) break;
+                const point = mapPoint(x, y);
+                if (!started) {
+                    ctx.moveTo(point.x, point.y);
+                    started = true;
+                } else {
+                    ctx.lineTo(point.x, point.y);
+                }
+            }
+            ctx.stroke();
+            ctx.restore();
+        }
+
+        function drawStaircase(time) {
+            if (solutionsShown < 1) return;
+            ctx.save();
+            ctx.strokeStyle = 'rgba(255, 230, 120, 0.68)';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            const visible = pellSolutions.slice(0, solutionsShown);
+            visible.forEach((solution, index) => {
+                const point = mapPoint(solution.x, solution.y);
+                if (index === 0) {
+                    ctx.moveTo(point.x, plane.originY);
+                    ctx.lineTo(point.x, point.y);
+                } else {
+                    const prev = visible[index - 1];
+                    const prevPoint = mapPoint(prev.x, prev.y);
+                    ctx.moveTo(prevPoint.x, prevPoint.y);
+                    ctx.lineTo(point.x, prevPoint.y);
+                    ctx.lineTo(point.x, point.y);
+                }
+            });
+            ctx.stroke();
+
+            const pulse = Math.sin(time * 0.004) * 0.5 + 0.5;
+            const current = visible[visible.length - 1];
+            const point = mapPoint(current.x, current.y);
+            ctx.strokeStyle = `rgba(255, 255, 200, ${0.42 + 0.3 * pulse})`;
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.arc(point.x, point.y, 12 + pulse * 6, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.restore();
+        }
+
+        function drawPrimeGlowField(time) {
+            if (solutionsShown < 1) return;
+            ctx.save();
+            ctx.globalCompositeOperation = 'lighter';
+            const pulse = Math.sin(time * 0.004) * 0.5 + 0.5;
+            pellSolutions.slice(0, solutionsShown).forEach((solution, index) => {
+                const point = mapPoint(solution.x, solution.y);
+                const radius = Math.max(8, 14 - index) + pulse * 4;
+                const gradient = ctx.createRadialGradient(point.x, point.y, 0, point.x, point.y, radius);
+                gradient.addColorStop(0, `rgba(255, 245, 210, ${0.35 + pulse * 0.2})`);
+                gradient.addColorStop(0.6, `rgba(135, 210, 255, ${0.2 + pulse * 0.15})`);
+                gradient.addColorStop(1, 'rgba(20, 40, 80, 0)');
+                ctx.fillStyle = gradient;
+                ctx.beginPath();
+                ctx.arc(point.x, point.y, radius, 0, Math.PI * 2);
+                ctx.fill();
+            });
+            ctx.restore();
+        }
+
+        function drawSolutions() {
+            if (solutionsShown < 1) return;
+            ctx.save();
+            pellSolutions.slice(0, solutionsShown).forEach((solution, index) => {
+                const point = mapPoint(solution.x, solution.y);
+                ctx.fillStyle = index === solutionsShown - 1
+                    ? 'rgba(255, 255, 200, 0.95)'
+                    : 'rgba(180, 220, 255, 0.85)';
+                ctx.beginPath();
+                ctx.arc(point.x, point.y, 6, 0, Math.PI * 2);
+                ctx.fill();
+            });
+            ctx.restore();
+        }
+
+        function drawHoverHighlight(time) {
+            if (!hoveredSolution) return;
+            const pulse = Math.sin(time * 0.01) * 0.5 + 0.5;
+            const point = mapPoint(hoveredSolution.x, hoveredSolution.y);
+            ctx.save();
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = `rgba(255, 255, 220, ${0.7 + 0.3 * pulse})`;
+            ctx.beginPath();
+            ctx.arc(point.x, point.y, 12 + pulse * 4, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.restore();
+        }
+
+        function updateStatsDisplay() {
+            if (solutionsShown < 1) return;
+            const current = pellSolutions[solutionsShown - 1];
+            stats.rangeInfo.textContent = `第 ${current.index} 阶解：x = ${current.x.toLocaleString('zh-CN')}，y = ${current.y.toLocaleString('zh-CN')}`;
+            stats.count.textContent = solutionsShown.toString();
+            stats.x.textContent = current.x.toLocaleString('zh-CN');
+            stats.y.textContent = current.y.toLocaleString('zh-CN');
+            stats.error.textContent = current.error.toExponential(2);
+
+            if (hoveredSolution) {
+                stats.insight.textContent = `第 ${hoveredSolution.index} 阶：斜率 ${hoveredSolution.ratio.toFixed(6)}，误差 ${hoveredSolution.error.toExponential(2)}。`;
+            } else {
+                stats.insight.textContent = `阶梯正在贴近斜率 √2 的对角线，最新误差 ${current.error.toExponential(2)}。`;
+            }
+        }
+
+        function spawnSolutionEffects(solution) {
+            const point = mapPoint(solution.x, solution.y);
+
+            for (let i = 0; i < 38; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const speed = 140 + Math.random() * 200;
+                particles.push({
+                    x: point.x,
+                    y: point.y,
+                    vx: Math.cos(angle) * speed,
+                    vy: Math.sin(angle) * speed,
+                    life: 0,
+                    duration: 0.9 + Math.random() * 0.7,
+                    hue: 190 + Math.random() * 120
+                });
+            }
+
+            shockwaves.push({
+                x: point.x,
+                y: point.y,
+                life: 0,
+                duration: 1.25
+            });
+
+            floaters.push({
+                text: `${solution.x}/${solution.y}`,
+                x: point.x,
+                y: point.y - 12,
+                life: 0,
+                duration: 2.6
+            });
+        }
+
+        function updateParticles(dt) {
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const p = particles[i];
+                p.life += dt;
+                if (p.life >= p.duration) {
+                    particles.splice(i, 1);
+                    continue;
+                }
+                p.vx *= 0.98;
+                p.vy *= 0.98;
+                p.x += p.vx * dt;
+                p.y += p.vy * dt;
+            }
+        }
+
+        function renderParticles() {
+            ctx.save();
+            particles.forEach(p => {
+                const alpha = 1 - p.life / p.duration;
+                ctx.fillStyle = `hsla(${p.hue}, 90%, 70%, ${alpha})`;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, 2.4 + (1 - alpha) * 2.2, 0, Math.PI * 2);
+                ctx.fill();
+            });
+            ctx.restore();
+        }
+
+        function updateShockwaves(dt) {
+            for (let i = shockwaves.length - 1; i >= 0; i--) {
+                const s = shockwaves[i];
+                s.life += dt;
+                if (s.life >= s.duration) {
+                    shockwaves.splice(i, 1);
+                }
+            }
+        }
+
+        function renderShockwaves() {
+            ctx.save();
+            ctx.globalCompositeOperation = 'lighter';
+            shockwaves.forEach(s => {
+                const progress = s.life / s.duration;
+                const radius = 18 + progress * 180;
+                const alpha = Math.max(0, 0.35 * (1 - progress));
+                ctx.strokeStyle = `rgba(120, 220, 255, ${alpha})`;
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.arc(s.x, s.y, radius, 0, Math.PI * 2);
+                ctx.stroke();
+            });
+            ctx.restore();
+        }
+
+        function updateFloaters(dt) {
+            for (let i = floaters.length - 1; i >= 0; i--) {
+                const f = floaters[i];
+                f.life += dt;
+                if (f.life >= f.duration) {
+                    floaters.splice(i, 1);
+                    continue;
+                }
+                f.y -= 40 * dt;
+                f.x += Math.sin(f.life * 6) * 10 * dt;
+            }
+        }
+
+        function renderFloaters() {
+            ctx.save();
+            ctx.font = '16px "Segoe UI", "Microsoft YaHei", sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            floaters.forEach(f => {
+                const alpha = Math.max(0, 1 - f.life / f.duration);
+                ctx.fillStyle = `rgba(255, 245, 210, ${alpha})`;
+                ctx.fillText(f.text, f.x, f.y);
+            });
+            ctx.restore();
+        }
+
+        const quoteDiv = document.querySelector('.quote');
+        const subtitles = [
+            '目标：寻找整数对 (x, y)，让 x² - 2y² = 1 成立。',
+            '把解映射到点阵上，双曲线勾勒出它们的轨迹。',
+            '第一阶解 (3, 2) 点亮，楼梯从这里起跳。',
+            '横线延展 x，竖线提升 y，折线阶梯逐级上升。',
+            '斜率 x/y 逼近 √2，误差骤降到千分之一以下。',
+            '每一阶等于前一阶乘以 (3 + 2√2)，节奏像节拍器。',
+            '折线越贴近对角线，近似 √2 的精度越高。',
+            '误差读数：几步后就冲进 10⁻⁶ 的精确度。',
+            '这些整数解对应于 √2 的连分数逼近项。',
+            '双曲线与阶梯同频共振，显露数论的隐藏节奏。',
+            '可以暂停，记录你喜欢的那一阶 (x, y) 组合。',
+            '无穷楼梯永远向 √2 冲刺——伟大的逼近游戏。'
+        ];
+        let subtitleIndex = 0;
+
+        function fitSubtitleToOneLine() {
+            const padding = 80;
+            const maxWidth = window.innerWidth - padding;
+            const base = window.innerWidth < 768 ? 30 : 36;
+            const min = window.innerWidth < 768 ? 24 : 30;
+            let size = base;
+            quoteDiv.style.fontSize = size + 'px';
+            while (quoteDiv.scrollWidth > maxWidth && size > min) {
+                size -= 1;
+                quoteDiv.style.fontSize = size + 'px';
+            }
+        }
+
+        function setSubtitleText(text) {
+            quoteDiv.style.fontSize = '';
+            quoteDiv.textContent = text;
+            fitSubtitleToOneLine();
+        }
+
+        function fadeIn() {
+            requestAnimationFrame(() => { quoteDiv.style.opacity = 1; });
+        }
+
+        function fadeOut(callback) {
+            quoteDiv.style.opacity = 0;
+            setTimeout(callback, 1000);
+        }
+
+        quoteDiv.style.opacity = 0;
+        setTimeout(() => {
+            setSubtitleText(subtitles[subtitleIndex]);
+            fadeIn();
+        }, 1200);
+
+        function rotateSubtitle() {
+            fadeOut(() => {
+                subtitleIndex = (subtitleIndex + 1) % subtitles.length;
+                setSubtitleText(subtitles[subtitleIndex]);
+                fadeIn();
+            });
+        }
+
+        setInterval(rotateSubtitle, 5000);
+
+        canvas.addEventListener('mousemove', (event) => {
+            const rect = canvas.getBoundingClientRect();
+            const x = event.clientX - rect.left;
+            const y = event.clientY - rect.top;
+            hoveredSolution = null;
+            pellSolutions.slice(0, solutionsShown).forEach(solution => {
+                const point = mapPoint(solution.x, solution.y);
+                if (Math.hypot(point.x - x, point.y - y) < 12) {
+                    hoveredSolution = solution;
+                }
+            });
+            canvas.style.cursor = hoveredSolution ? 'pointer' : 'default';
+        });
+
+        canvas.addEventListener('mouseleave', () => {
+            hoveredSolution = null;
+            canvas.style.cursor = 'default';
+        });
+
+        canvas.addEventListener('click', () => {
+            if (!hoveredSolution) return;
+            alert(`第 ${hoveredSolution.index} 阶解\nx = ${hoveredSolution.x}\ny = ${hoveredSolution.y}\n斜率 = ${hoveredSolution.ratio.toFixed(10)}\n误差 = ${hoveredSolution.error.toExponential(4)}`);
+        });
+
+        function animate(time) {
+            const delta = lastTime ? time - lastTime : 16;
+            const dt = delta / 1000;
+
+            if (solutionsShown === 0 && time > 1200) {
+                solutionsShown = 1;
+                lastReveal = time;
+                spawnSolutionEffects(pellSolutions[0]);
+            }
+
+            if (solutionsShown < pellSolutions.length && time - lastReveal > revealInterval) {
+                solutionsShown += 1;
+                lastReveal = time;
+                spawnSolutionEffects(pellSolutions[solutionsShown - 1]);
+            }
+
+            updateParticles(dt);
+            updateShockwaves(dt);
+            updateFloaters(dt);
+
+            drawBackground(time);
+            drawLatticePulseGrid(time);
+            drawNumberSpiralCollider(time);
+            drawHyperbola();
+            renderShockwaves();
+            drawStaircase(time);
+            drawPrimeGlowField(time);
+            renderParticles();
+            drawSolutions();
+            renderFloaters();
+            drawHoverHighlight(time);
+            updateStatsDisplay();
+
+            lastTime = time;
+            requestAnimationFrame(animate);
+        }
+
+        animate(0);
+    </script>
+</body>
+
+</html>

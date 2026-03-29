@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>傅里叶海浪：正弦叠加的海岸线</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #000;
+            overflow: hidden;
+            position: relative;
+        }
+
+        #canvas {
+            display: block;
+        }
+
+        .formula-display {
+            position: absolute;
+            top: 50px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: white;
+            font-size: 26px;
+            font-weight: 200;
+            letter-spacing: 2px;
+            text-shadow: 0 0 20px rgba(255, 255, 255, 0.5);
+            z-index: 100;
+        }
+
+        .formula-display .math {
+            font-family: 'Times New Roman', serif;
+            font-style: italic;
+            font-weight: 300;
+        }
+
+        .parameter-display {
+            position: absolute;
+            top: 110px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 22px;
+            font-weight: 300;
+            z-index: 100;
+        }
+
+        .parameter-value {
+            color: #00bcd4;
+            font-weight: 400;
+            text-shadow: 0 0 10px rgba(0, 188, 212, 0.8);
+        }
+
+        .secondary-param {
+            position: absolute;
+            top: 145px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 20px;
+            font-weight: 300;
+            z-index: 100;
+        }
+
+        .secondary-value {
+            color: #4fc3f7;
+            font-weight: 400;
+            text-shadow: 0 0 8px rgba(79, 195, 247, 0.6);
+        }
+
+        .wave-info {
+            position: absolute;
+            top: 50px;
+            right: 60px;
+            color: rgba(255, 255, 255, 0.85);
+            font-size: 16px;
+            font-weight: 300;
+            text-align: right;
+            line-height: 2;
+            z-index: 100;
+        }
+
+        .wave-label {
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 14px;
+        }
+
+        .wisdom {
+            position: absolute;
+            left: 60px;
+            right: 60px;
+            bottom: 60px;
+            max-width: 72ch;
+            color: rgba(255, 255, 255, 0.95);
+            font-size: 20px;
+            font-weight: 300;
+            line-height: 1.6;
+            letter-spacing: 0.2px;
+            text-shadow: 0 2px 10px rgba(0, 0, 0, 0.45);
+            user-select: none;
+            pointer-events: none;
+            z-index: 9999;
+        }
+
+        .wisdom div+div {
+            margin-top: 6px;
+            opacity: 0.95;
+        }
+
+        @media (max-width: 768px) {
+            .wisdom {
+                left: 16px;
+                right: 16px;
+                bottom: 24px;
+                font-size: 16px;
+            }
+
+            .wave-info {
+                top: 200px;
+                right: 16px;
+                font-size: 14px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <canvas id="canvas"></canvas>
+
+    <div class="formula-display">
+        <div class="math">f(x) = Σ A<sub>n</sub> · sin(n·ω·x + φ<sub>n</sub>)</div>
+    </div>
+    <div class="parameter-display">
+        谐波数 = <span class="parameter-value" id="harmonics-value">1</span>
+    </div>
+    <div class="secondary-param">
+        振幅衰减 = <span class="secondary-value" id="decay-value">1/n</span>
+    </div>
+
+    <div class="wave-info">
+        <div class="wave-label">基频</div>
+        <div style="color: #00bcd4; font-size: 18px;">ω₁</div>
+        <div class="wave-label" style="margin-top: 8px;">总能量</div>
+        <div style="color: #4fc3f7; font-size: 18px;" id="energy-value">100%</div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const harmonicsDisplay = document.getElementById('harmonics-value');
+        const decayDisplay = document.getElementById('decay-value');
+        const energyDisplay = document.getElementById('energy-value');
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        let animationTime = 0;
+        let numHarmonics = 0;
+        const maxHarmonics = 15;
+
+        // 波浪参数
+        const baseFreq = 0.02;
+        const baseAmplitude = 80;
+
+        function drawBackground() {
+            // 深海渐变背景
+            const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+
+            const hue1 = 200 + Math.sin(animationTime * 0.1) * 20;
+            const hue2 = 220 + Math.sin(animationTime * 0.15) * 20;
+
+            gradient.addColorStop(0, `hsla(${hue1}, 70%, 5%, 1)`);
+            gradient.addColorStop(0.4, `hsla(${hue2}, 60%, 8%, 1)`);
+            gradient.addColorStop(0.7, `hsla(${hue2 + 10}, 50%, 12%, 1)`);
+            gradient.addColorStop(1, `hsla(${hue2 + 20}, 40%, 15%, 1)`);
+
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+
+        // 绘制单个正弦波（显示各个谐波）
+        function drawIndividualWave(n, yOffset, alpha = 1) {
+            const amplitude = baseAmplitude / n;
+            const frequency = baseFreq * n;
+            const phase = animationTime * (0.5 + n * 0.1);
+
+            ctx.save();
+            ctx.globalAlpha = alpha;
+
+            // 波浪颜色随谐波次数变化
+            const hue = 180 + n * 15;
+            const saturation = 80 - n * 3;
+            const lightness = 50 + n * 2;
+
+            ctx.strokeStyle = `hsla(${hue}, ${saturation}%, ${lightness}%, 0.6)`;
+            ctx.lineWidth = 3;
+            ctx.lineCap = 'round';
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = `hsla(${hue}, ${saturation}%, ${lightness}%, 0.4)`;
+
+            ctx.beginPath();
+
+            for (let x = 0; x < canvas.width; x += 2) {
+                const y = yOffset + amplitude * Math.sin(frequency * x + phase);
+
+                if (x === 0) {
+                    ctx.moveTo(x, y);
+                } else {
+                    ctx.lineTo(x, y);
+                }
+            }
+
+            ctx.stroke();
+
+            // 标注谐波次数
+            if (n <= 5) {
+                ctx.fillStyle = `hsla(${hue}, ${saturation}%, ${lightness}%, 0.8)`;
+                ctx.font = '14px monospace';
+                ctx.textAlign = 'right';
+                const labelY = yOffset + amplitude * Math.sin(phase);
+                ctx.fillText(`n=${n}`, canvas.width - 20, labelY);
+            }
+
+            ctx.restore();
+        }
+
+        // 绘制叠加后的复合波
+        function drawCompositeWave() {
+            const centerY = canvas.height / 2;
+
+            ctx.save();
+
+            // 主波浪使用更明亮的颜色和发光效果
+            ctx.strokeStyle = 'rgba(100, 255, 255, 0.9)';
+            ctx.lineWidth = 4;
+            ctx.lineCap = 'round';
+            ctx.shadowBlur = 30;
+            ctx.shadowColor = 'rgba(100, 255, 255, 0.6)';
+
+            ctx.beginPath();
+
+            const points = [];
+
+            for (let x = 0; x < canvas.width; x += 1) {
+                let y = centerY;
+
+                // 叠加所有谐波
+                for (let n = 1; n <= numHarmonics; n++) {
+                    const amplitude = baseAmplitude / n;
+                    const frequency = baseFreq * n;
+                    const phase = animationTime * (0.5 + n * 0.1);
+                    y += amplitude * Math.sin(frequency * x + phase);
+                }
+
+                points.push({ x, y });
+
+                if (x === 0) {
+                    ctx.moveTo(x, y);
+                } else {
+                    ctx.lineTo(x, y);
+                }
+            }
+
+            ctx.stroke();
+
+            // 绘制更强的外发光
+            ctx.globalAlpha = 0.4;
+            ctx.lineWidth = 8;
+            ctx.stroke();
+
+            ctx.globalAlpha = 0.2;
+            ctx.lineWidth = 16;
+            ctx.stroke();
+
+            // 填充波浪下方区域
+            ctx.globalAlpha = 0.1;
+            ctx.lineTo(canvas.width, canvas.height);
+            ctx.lineTo(0, canvas.height);
+            ctx.closePath();
+
+            const fillGradient = ctx.createLinearGradient(0, centerY - 100, 0, canvas.height);
+            fillGradient.addColorStop(0, 'rgba(0, 188, 212, 0.3)');
+            fillGradient.addColorStop(1, 'rgba(0, 188, 212, 0.05)');
+            ctx.fillStyle = fillGradient;
+            ctx.fill();
+
+            // 绘制波峰粒子效果
+            if (numHarmonics >= 3) {
+                drawWaveParticles(points);
+            }
+
+            ctx.restore();
+        }
+
+        // 绘制波浪粒子特效
+        function drawWaveParticles(points) {
+            ctx.save();
+
+            for (let i = 0; i < points.length; i += 20) {
+                const point = points[i];
+                const pulse = Math.sin(animationTime * 3 + i * 0.1) * 0.5 + 0.5;
+
+                if (pulse > 0.7) {
+                    const size = 2 + pulse * 3;
+
+                    ctx.fillStyle = `rgba(150, 255, 255, ${pulse * 0.8})`;
+                    ctx.shadowBlur = 10;
+                    ctx.shadowColor = 'rgba(150, 255, 255, 0.6)';
+
+                    ctx.beginPath();
+                    ctx.arc(point.x, point.y, size, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+
+            ctx.restore();
+        }
+
+        // 绘制频谱分析（左下角）
+        function drawFrequencySpectrum() {
+            const barWidth = 30;
+            const barGap = 10;
+            const startX = 80;
+            const startY = canvas.height - 150;
+            const maxHeight = 100;
+            const totalBars = 8;
+            const totalWidth = totalBars * (barWidth + barGap) - barGap;
+
+            ctx.save();
+
+            // 标题放在柱状图中间
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+            ctx.font = '15px monospace';
+            ctx.textAlign = 'center';
+            ctx.shadowBlur = 5;
+            ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
+            ctx.fillText('频谱分析', startX + totalWidth / 2, startY - 25);
+            ctx.shadowBlur = 0;
+
+            for (let n = 1; n <= Math.min(numHarmonics, 8); n++) {
+                const amplitude = 1 / n;
+                const barHeight = amplitude * maxHeight;
+                const x = startX + (n - 1) * (barWidth + barGap);
+                const y = startY;
+
+                // 条形图颜色
+                const hue = 180 + n * 15;
+                const pulse = Math.sin(animationTime * 2 + n * 0.5) * 0.2 + 0.8;
+
+                // 绘制条形
+                const gradient = ctx.createLinearGradient(x, y, x, y - barHeight);
+                gradient.addColorStop(0, `hsla(${hue}, 70%, 50%, 0.8)`);
+                gradient.addColorStop(1, `hsla(${hue}, 80%, 60%, 0.9)`);
+
+                ctx.fillStyle = gradient;
+                ctx.shadowBlur = 15;
+                ctx.shadowColor = `hsla(${hue}, 80%, 60%, 0.5)`;
+
+                ctx.fillRect(x, y, barWidth, -barHeight * pulse);
+
+                // 标签
+                ctx.shadowBlur = 0;
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+                ctx.font = '12px monospace';
+                ctx.textAlign = 'center';
+                ctx.fillText(`f${n}`, x + barWidth / 2, y + 20);
+            }
+
+            ctx.restore();
+        }
+
+        // 绘制波形叠加示意图（右下角）
+        function drawWaveDecomposition() {
+            const boxWidth = 300;
+            const boxHeight = 200;
+            const startX = canvas.width - boxWidth - 70;
+            const startY = canvas.height - boxHeight - 70;
+
+            ctx.save();
+            ctx.translate(startX, startY);
+
+            // 半透明背景
+            ctx.fillStyle = 'rgba(0, 20, 30, 0.75)';
+            ctx.fillRect(0, 0, boxWidth, boxHeight);
+
+            // 边框
+            ctx.strokeStyle = 'rgba(0, 188, 212, 0.5)';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(0, 0, boxWidth, boxHeight);
+
+            // 标题
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+            ctx.font = '15px monospace';
+            ctx.textAlign = 'center';
+            ctx.shadowBlur = 5;
+            ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
+            ctx.fillText('谐波分解', boxWidth / 2, 30);
+            ctx.shadowBlur = 0;
+
+            // 绘制前3个谐波的小波形
+            const waveHeight = 35;
+            const waveGap = 18;
+            const wavesToShow = Math.min(numHarmonics, 3);
+
+            for (let n = 1; n <= wavesToShow; n++) {
+                const y = 55 + (n - 1) * (waveHeight + waveGap);
+                const amplitude = waveHeight / 2 / n;
+                const frequency = 0.1 * n;
+                const phase = animationTime * (0.5 + n * 0.1);
+
+                const hue = 180 + n * 15;
+                ctx.strokeStyle = `hsla(${hue}, 70%, 60%, 0.8)`;
+                ctx.lineWidth = 2;
+
+                ctx.beginPath();
+                for (let x = 0; x < boxWidth; x += 2) {
+                    const waveY = y + amplitude * Math.sin(frequency * x + phase);
+                    if (x === 0) {
+                        ctx.moveTo(x, waveY);
+                    } else {
+                        ctx.lineTo(x, waveY);
+                    }
+                }
+                ctx.stroke();
+
+                // 标签
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+                ctx.font = '12px monospace';
+                ctx.textAlign = 'left';
+                ctx.fillText(`A${n}/n·sin(${n}ωx)`, 15, y - 8);
+            }
+
+            // 加号
+            if (wavesToShow > 1) {
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+                ctx.font = '24px monospace';
+                ctx.textAlign = 'center';
+                for (let i = 1; i < wavesToShow; i++) {
+                    const y = 55 + (i - 0.5) * (waveHeight + waveGap);
+                    ctx.fillText('+', boxWidth / 2, y + 8);
+                }
+            }
+
+            ctx.restore();
+        }
+
+        // 绘制中心参考线
+        function drawCenterLine() {
+            const centerY = canvas.height / 2;
+
+            ctx.save();
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([10, 10]);
+
+            ctx.beginPath();
+            ctx.moveTo(0, centerY);
+            ctx.lineTo(canvas.width, centerY);
+            ctx.stroke();
+
+            ctx.setLineDash([]);
+            ctx.restore();
+        }
+
+        function animate() {
+            try {
+                drawBackground();
+                drawCenterLine();
+
+                animationTime += 0.016;
+
+                // 谐波数从0循环增长到15，然后重新开始
+                numHarmonics += 0.02; // 约12秒走完
+                if (numHarmonics >= maxHarmonics) {
+                    numHarmonics = 0; // 重新开始循环
+                }
+
+                const displayHarmonics = Math.floor(numHarmonics);
+
+                // 更新显示值
+                harmonicsDisplay.textContent = displayHarmonics;
+
+                // 计算总能量（振幅平方和的归一化）
+                let totalEnergy = 0;
+                const maxEnergy = Math.PI * Math.PI / 6; // 理论最大值 Σ(1/n²) = π²/6
+                for (let n = 1; n <= displayHarmonics; n++) {
+                    totalEnergy += 1 / (n * n);
+                }
+                const energyPercent = Math.min(100, (totalEnergy / maxEnergy) * 100).toFixed(0);
+                energyDisplay.textContent = energyPercent + '%';
+
+                // 绘制各个组件
+                // 先绘制单个谐波（背景层）
+                const spacing = Math.min(120, canvas.height / (displayHarmonics + 2));
+                for (let n = 1; n <= Math.min(displayHarmonics, 5); n++) {
+                    const yOffset = 100 + n * spacing;
+                    drawIndividualWave(n, yOffset, 0.4);
+                }
+
+                // 绘制叠加波（主要视觉）
+                drawCompositeWave();
+
+                // 绘制辅助信息
+                drawFrequencySpectrum();
+                drawWaveDecomposition();
+
+                requestAnimationFrame(animate);
+            } catch (error) {
+                console.error('Animation error:', error);
+                requestAnimationFrame(animate);
+            }
+        }
+
+        animate();
+    </script>
+
+    <div class="wisdom">
+        <div>任何复杂的波形，都能分解为简单正弦波的叠加。</div>
+        <div>海浪如此，音乐如此，人生亦如此——复杂源于简单的和声。</div>
+    </div>
+
+</body>
+
+</html>

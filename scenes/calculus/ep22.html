@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>复函数向量场 · 复平面上的数学之舞</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #0a0015 0%, #1a0033 50%, #2a0055 100%);
+            overflow: hidden; position: relative; height: 100vh;
+        }
+        #canvas { display: block; }
+        
+        .wisdom {
+            position: absolute; left: 50%; top: 50%; 
+            transform: translate(-50%, -50%);
+            color: rgba(255, 255, 255, 0.95); 
+            font-size: 48px; font-weight: 600;
+            line-height: 1.4; letter-spacing: 2px;
+            text-align: center; 
+            user-select: none; pointer-events: none;
+            z-index: 9999; 
+            text-shadow:
+                0 0 5px rgba(255, 100, 255, 0.8),
+                0 0 20px rgba(200, 50, 255, 0.5),
+                0 0 40px rgba(150, 0, 255, 0.3);
+            transition: opacity 2s ease, transform 2s ease;
+            max-width: 90vw;
+            white-space: nowrap;
+        }
+        
+        .function-info {
+            position: absolute; 
+            left: 50%; 
+            top: calc(50% - 120px);
+            transform: translateX(-50%);
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 48px; 
+            font-weight: 500;
+            text-shadow: 0 0 10px rgba(255, 100, 255, 0.5);
+            z-index: 1000;
+            text-align: center;
+        }
+        
+        @media (max-width: 768px) {
+            .wisdom { font-size: 32px; letter-spacing: 1px; }
+            .function-info { font-size: 32px; top: calc(50% - 90px); }
+        }
+        
+        @media (max-width: 480px) {
+            .wisdom { font-size: 24px; letter-spacing: 0.5px; }
+            .function-info { font-size: 24px; top: calc(50% - 70px); }
+        }
+    </style>
+</head>
+<body>
+    <canvas id="canvas"></canvas>
+    <div class="wisdom">复变函数编织时空，向量场描绘宇宙律动</div>
+    <div class="function-info" id="function-display">f(z) = z²</div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const functionDisplay = document.getElementById('function-display');
+        
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        let animationTime = 0;
+        let currentFunctionIndex = 0;
+        let particles = [];
+        let vectorField = [];
+        
+        // 复数类
+        class Complex {
+            constructor(real, imag) {
+                this.real = real;
+                this.imag = imag;
+            }
+            
+            add(other) {
+                return new Complex(this.real + other.real, this.imag + other.imag);
+            }
+            
+            multiply(other) {
+                return new Complex(
+                    this.real * other.real - this.imag * other.imag,
+                    this.real * other.imag + this.imag * other.real
+                );
+            }
+            
+            divide(other) {
+                const denominator = other.real * other.real + other.imag * other.imag;
+                return new Complex(
+                    (this.real * other.real + this.imag * other.imag) / denominator,
+                    (this.imag * other.real - this.real * other.imag) / denominator
+                );
+            }
+            
+            magnitude() {
+                return Math.sqrt(this.real * this.real + this.imag * this.imag);
+            }
+            
+            arg() {
+                return Math.atan2(this.imag, this.real);
+            }
+            
+            exp() {
+                const mag = Math.exp(this.real);
+                return new Complex(mag * Math.cos(this.imag), mag * Math.sin(this.imag));
+            }
+            
+            sin() {
+                // sin(z) = (e^(iz) - e^(-iz)) / (2i)
+                const iz = new Complex(-this.imag, this.real);
+                const negiz = new Complex(this.imag, -this.real);
+                const eiz = iz.exp();
+                const enegiz = negiz.exp();
+                // (eiz - enegiz) / (2i) = (eiz - enegiz) * (-i/2)
+                // 对于 (a+bi)*(-i/2): 实部 = b/2, 虚部 = -a/2
+                const diff_real = eiz.real - enegiz.real;
+                const diff_imag = eiz.imag - enegiz.imag;
+                return new Complex(
+                    diff_imag / 2,
+                    -diff_real / 2
+                );
+            }
+            
+            conjugate() {
+                return new Complex(this.real, -this.imag);
+            }
+        }
+        
+        // 复函数定义
+        const complexFunctions = [
+            {
+                name: "f(z) = z²",
+                func: z => z.multiply(z),
+                description: "平方变换：旋转与拉伸的舞蹈"
+            },
+            {
+                name: "f(z) = 1/z",
+                func: z => {
+                    if (z.magnitude() < 0.01) return new Complex(0, 0);
+                    return new Complex(1, 0).divide(z);
+                },
+                description: "倒数变换：反演的魔法"
+            },
+            {
+                name: "f(z) = sin(z)",
+                func: z => z.sin(),
+                description: "正弦变换：波动的诗篇"
+            },
+            {
+                name: "f(z) = z³ - z",
+                func: z => z.multiply(z).multiply(z).add(new Complex(-z.real, -z.imag)),
+                description: "三次变换：混沌的边缘"
+            },
+            {
+                name: "f(z) = e^z",
+                func: z => z.exp(),
+                description: "指数变换：增长的力量"
+            }
+        ];
+        
+        // 坐标转换
+        function screenToComplex(x, y) {
+            const scale = 3;
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+            const minDim = Math.min(canvas.width, canvas.height);
+            
+            return new Complex(
+                (x - centerX) * scale / (minDim / 2),
+                -(y - centerY) * scale / (minDim / 2)
+            );
+        }
+        
+        function complexToScreen(z) {
+            const scale = 3;
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+            const minDim = Math.min(canvas.width, canvas.height);
+            
+            return {
+                x: centerX + z.real * (minDim / 2) / scale,
+                y: centerY - z.imag * (minDim / 2) / scale
+            };
+        }
+        
+        // 粒子类
+        class Particle {
+            constructor(x, y) {
+                this.z = screenToComplex(x, y);
+                this.trail = [];
+                this.life = Math.random() * 300 + 200;
+                this.maxLife = this.life;
+                this.color = {
+                    h: Math.random() * 60 + 270, // 紫色到蓝色
+                    s: 70 + Math.random() * 30,
+                    l: 50 + Math.random() * 30
+                };
+            }
+            
+            update() {
+                if (this.life <= 0) return false;
+                
+                // 添加当前位置到轨迹
+                const screenPos = complexToScreen(this.z);
+                this.trail.push({ x: screenPos.x, y: screenPos.y, life: this.life });
+                
+                // 限制轨迹长度
+                if (this.trail.length > 50) {
+                    this.trail.shift();
+                }
+                
+                // 根据向量场移动
+                const currentFunc = complexFunctions[currentFunctionIndex];
+                const derivative = this.computeDerivative(this.z, currentFunc.func);
+                
+                // 归一化向量
+                const magnitude = derivative.magnitude();
+                if (magnitude > 0.001) {
+                    const normalizedVel = new Complex(
+                        derivative.real / magnitude * 0.008,
+                        derivative.imag / magnitude * 0.008
+                    );
+                    this.z = this.z.add(normalizedVel);
+                }
+                
+                this.life--;
+                return true;
+            }
+            
+            computeDerivative(z, func) {
+                const h = 0.001;
+                const fz = func(z);
+                const fzh = func(new Complex(z.real + h, z.imag));
+                
+                return new Complex(
+                    (fzh.real - fz.real) / h,
+                    (fzh.imag - fz.imag) / h
+                );
+            }
+            
+            draw() {
+                if (this.trail.length < 2) return;
+                
+                ctx.save();
+                
+                // 绘制轨迹
+                for (let i = 1; i < this.trail.length; i++) {
+                    const point1 = this.trail[i - 1];
+                    const point2 = this.trail[i];
+                    
+                    const alpha = (point2.life / this.maxLife) * 0.8;
+                    const width = (point2.life / this.maxLife) * 3 + 1;
+                    
+                    ctx.strokeStyle = `hsla(${this.color.h}, ${this.color.s}%, ${this.color.l}%, ${alpha})`;
+                    ctx.lineWidth = width;
+                    ctx.lineCap = 'round';
+                    
+                    ctx.beginPath();
+                    ctx.moveTo(point1.x, point1.y);
+                    ctx.lineTo(point2.x, point2.y);
+                    ctx.stroke();
+                }
+                
+                // 绘制粒子头部发光效果
+                if (this.trail.length > 0) {
+                    const head = this.trail[this.trail.length - 1];
+                    const alpha = this.life / this.maxLife;
+                    
+                    // 外层光晕
+                    const gradient = ctx.createRadialGradient(
+                        head.x, head.y, 0,
+                        head.x, head.y, 20
+                    );
+                    gradient.addColorStop(0, `hsla(${this.color.h}, ${this.color.s}%, ${this.color.l + 20}%, ${alpha * 0.6})`);
+                    gradient.addColorStop(1, `hsla(${this.color.h}, ${this.color.s}%, ${this.color.l}%, 0)`);
+                    
+                    ctx.fillStyle = gradient;
+                    ctx.beginPath();
+                    ctx.arc(head.x, head.y, 20, 0, Math.PI * 2);
+                    ctx.fill();
+                    
+                    // 内层亮点
+                    ctx.fillStyle = `hsla(${this.color.h}, ${this.color.s}%, ${Math.min(this.color.l + 30, 100)}%, ${alpha})`;
+                    ctx.beginPath();
+                    ctx.arc(head.x, head.y, 3, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+                
+                ctx.restore();
+            }
+        }
+        
+        // 创建向量场网格
+        function createVectorField() {
+            vectorField = [];
+            const gridSize = 30;
+            const currentFunc = complexFunctions[currentFunctionIndex];
+            
+            for (let x = 0; x < canvas.width; x += gridSize) {
+                for (let y = 0; y < canvas.height; y += gridSize) {
+                    const z = screenToComplex(x, y);
+                    const fz = currentFunc.func(z);
+                    
+                    // 计算导数作为向量方向
+                    const h = 0.001;
+                    const fzh = currentFunc.func(new Complex(z.real + h, z.imag));
+                    const derivative = new Complex(
+                        (fzh.real - fz.real) / h,
+                        (fzh.imag - fz.imag) / h
+                    );
+                    
+                    const magnitude = Math.min(derivative.magnitude(), 2);
+                    const angle = derivative.arg();
+                    
+                    vectorField.push({
+                        x: x,
+                        y: y,
+                        magnitude: magnitude,
+                        angle: angle,
+                        color: {
+                            h: (angle * 180 / Math.PI + 360) % 360,
+                            s: 70,
+                            l: 50 + magnitude * 20
+                        }
+                    });
+                }
+            }
+        }
+        
+        // 绘制向量场
+        function drawVectorField() {
+            ctx.save();
+            
+            vectorField.forEach(vector => {
+                const alpha = Math.sin(animationTime * 2 + vector.x * 0.01 + vector.y * 0.01) * 0.2 + 0.3;
+                const scale = Math.sin(animationTime * 1.5 + vector.x * 0.005) * 0.3 + 0.7;
+                
+                ctx.strokeStyle = `hsla(${vector.color.h}, ${vector.color.s}%, ${vector.color.l}%, ${alpha})`;
+                ctx.lineWidth = 2;
+                ctx.lineCap = 'round';
+                
+                const length = vector.magnitude * 15 * scale;
+                const endX = vector.x + Math.cos(vector.angle) * length;
+                const endY = vector.y - Math.sin(vector.angle) * length; // 负号因为屏幕坐标系
+                
+                // 绘制向量线
+                ctx.beginPath();
+                ctx.moveTo(vector.x, vector.y);
+                ctx.lineTo(endX, endY);
+                ctx.stroke();
+                
+                // 绘制箭头
+                if (length > 5) {
+                    const arrowSize = 8;
+                    const arrowAngle = 0.5;
+                    
+                    ctx.beginPath();
+                    ctx.moveTo(endX, endY);
+                    ctx.lineTo(
+                        endX - arrowSize * Math.cos(vector.angle - arrowAngle),
+                        endY + arrowSize * Math.sin(vector.angle - arrowAngle)
+                    );
+                    ctx.moveTo(endX, endY);
+                    ctx.lineTo(
+                        endX - arrowSize * Math.cos(vector.angle + arrowAngle),
+                        endY + arrowSize * Math.sin(vector.angle + arrowAngle)
+                    );
+                    ctx.stroke();
+                }
+            });
+            
+            ctx.restore();
+        }
+        
+        // 绘制背景网格
+        function drawGrid() {
+            ctx.save();
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+            ctx.lineWidth = 1;
+            
+            const gridSpacing = Math.min(canvas.width, canvas.height) / 6;
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+            
+            // 垂直线
+            for (let x = centerX % gridSpacing; x < canvas.width; x += gridSpacing) {
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, canvas.height);
+                ctx.stroke();
+            }
+            
+            // 水平线
+            for (let y = centerY % gridSpacing; y < canvas.height; y += gridSpacing) {
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(canvas.width, y);
+                ctx.stroke();
+            }
+            
+            // 坐标轴
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+            ctx.lineWidth = 2;
+            
+            // 实轴
+            ctx.beginPath();
+            ctx.moveTo(0, centerY);
+            ctx.lineTo(canvas.width, centerY);
+            ctx.stroke();
+            
+            // 虚轴
+            ctx.beginPath();
+            ctx.moveTo(centerX, 0);
+            ctx.lineTo(centerX, canvas.height);
+            ctx.stroke();
+            
+            ctx.restore();
+        }
+        
+        // 绘制背景
+        function drawBackground() {
+            ctx.fillStyle = 'rgba(10, 0, 21, 0.15)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+        
+        // 初始化粒子
+        function initParticles() {
+            particles = [];
+            for (let i = 0; i < 20; i++) {
+                particles.push(new Particle(
+                    Math.random() * canvas.width,
+                    Math.random() * canvas.height
+                ));
+            }
+        }
+        
+        // 动画循环
+        function animate() {
+            try {
+                drawBackground();
+                animationTime += 0.016;
+                
+                // 每8秒切换函数
+                const newFunctionIndex = Math.floor(animationTime / 5) % complexFunctions.length;
+                if (newFunctionIndex !== currentFunctionIndex) {
+                    currentFunctionIndex = newFunctionIndex;
+                    functionDisplay.textContent = complexFunctions[currentFunctionIndex].name;
+                    createVectorField();
+                    initParticles(); // 重新初始化粒子
+                }
+                
+                // 初始化
+                if (vectorField.length === 0) {
+                    createVectorField();
+                    initParticles();
+                }
+                
+                // 绘制网格
+                drawGrid();
+                
+                // 绘制向量场
+                drawVectorField();
+                
+                // 更新和绘制粒子
+                particles = particles.filter(particle => {
+                    const alive = particle.update();
+                    if (alive) {
+                        particle.draw();
+                    }
+                    return alive;
+                });
+                
+                // 添加新粒子
+                if (particles.length < 15 && Math.random() < 0.3) {
+                    particles.push(new Particle(
+                        Math.random() * canvas.width,
+                        Math.random() * canvas.height
+                    ));
+                }
+                
+                requestAnimationFrame(animate);
+                
+            } catch (error) {
+                console.error('Animation error:', error);
+                requestAnimationFrame(animate);
+            }
+        }
+        
+        // 鼠标交互
+        canvas.addEventListener('click', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            
+            // 在点击位置添加粒子
+            for (let i = 0; i < 3; i++) {
+                particles.push(new Particle(
+                    x + (Math.random() - 0.5) * 50,
+                    y + (Math.random() - 0.5) * 50
+                ));
+            }
+        });
+        
+        // 启动动画
+        ctx.fillStyle = 'rgba(10, 0, 21, 1)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        animate();
+    </script>
+</body>
+</html>

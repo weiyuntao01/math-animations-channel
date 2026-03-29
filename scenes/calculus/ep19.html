@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>z = sin(xy) 情绪曲面 · 数学函数之美</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #0a0015 0%, #1a0033 50%, #0f001a 100%);
+            overflow: hidden; position: relative; height: 100vh;
+        }
+        #canvas { display: block; }
+        
+        .title-area {
+            position: absolute; top: 40px; left: 50%; transform: translateX(-50%);
+            text-align: center; z-index: 100; pointer-events: none;
+        }
+        .main-title {
+            color: white; font-size: 38px; font-weight: 500; letter-spacing: 4px;
+            text-shadow: 0 0 40px rgba(138, 43, 226, 0.9), 0 0 20px rgba(75, 0, 130, 0.6);
+            margin-bottom: 12px;
+        }
+        .formula {
+            color: white; font-size: 24px; font-weight: 500;
+            font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            text-shadow: 0 0 20px rgba(138, 43, 226, 0.6);
+            line-height: 1.6;
+        }
+        
+        .stats-bar {
+            position: absolute; bottom: 0; left: 0; right: 0; height: 90px;
+            background: linear-gradient(to top, rgba(10, 0, 20, 0.9), transparent);
+            display: flex; justify-content: center; align-items: center;
+            gap: 60px; z-index: 100; pointer-events: none;
+        }
+        .stat-item { text-align: center; }
+        .stat-label {
+            color: rgba(218, 112, 214, 0.7); font-size: 13px;
+            margin-bottom: 6px; letter-spacing: 1px;
+        }
+        .stat-value {
+            color: #da70d6; font-size: 26px; font-weight: 300;
+            text-shadow: 0 0 15px rgba(138, 43, 226, 0.8);
+            font-family: 'Courier New', monospace;
+        }
+        
+        .wisdom {
+            position: absolute; left: 50%; bottom: 110px; transform: translateX(-50%);
+            max-width: 85vw; white-space: nowrap; overflow: hidden;
+            color: rgba(255, 255, 255, 0.98); font-size: 19px; font-weight: 500;
+            line-height: 1.6; letter-spacing: 0.5px;
+            -webkit-text-stroke: 0.5px rgba(138, 43, 226, 0.3);
+            text-shadow:
+                0 0 2px rgba(138, 43, 226, 0.6),
+                0 0 12px rgba(138, 43, 226, 0.4),
+                0 2px 10px rgba(0, 0, 0, 0.8);
+            text-align: center; user-select: none; pointer-events: none;
+            z-index: 9999; padding: 0 40px;
+            transition: opacity 1.5s ease;
+        }
+        
+        @media (max-width: 768px) {
+            .main-title { font-size: 28px; }
+            .formula { font-size: 18px; }
+            .stats-bar { gap: 30px; height: 80px; }
+            .stat-value { font-size: 20px; }
+            .wisdom { font-size: 15px; bottom: 95px; }
+        }
+    </style>
+</head>
+<body>
+    <canvas id="canvas"></canvas>
+
+    <div class="title-area">
+        <div class="main-title">情绪曲面</div>
+        <div class="formula">z = sin(xy)</div>
+    </div>
+
+    <div class="stats-bar">
+        <div class="stat-item">
+            <div class="stat-label">频率缩放</div>
+            <div class="stat-value">1.2</div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-label">网格密度</div>
+            <div class="stat-value">45×45</div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-label">旋转角度</div>
+            <div class="stat-value" id="rotationDisplay">0°</div>
+        </div>
+    </div>
+
+    <div class="wisdom"></div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        // 参数 - 固定最佳观赏值
+        let gridSize = 45;
+        let scale = 1.2;
+        let heightScale = 1.0;
+        let animationTime = 0;
+        
+        // 相机控制 - 自动旋转
+        let rotationY = 0;
+        let rotationX = 0;
+
+        // 计算曲面函数
+        function surfaceFunction(x, y) {
+            return Math.sin(x * y * scale) * heightScale;
+        }
+
+        // 3D投影
+        function project3D(x, y, z) {
+            const distance = 600;
+            const zoom = Math.min(canvas.width, canvas.height) / 8;
+            
+            // 应用旋转
+            const cosX = Math.cos(rotationX);
+            const sinX = Math.sin(rotationX);
+            const cosY = Math.cos(rotationY);
+            const sinY = Math.sin(rotationY);
+            
+            const x1 = x * cosY - z * sinY;
+            const z1 = x * sinY + z * cosY;
+            
+            const y1 = y * cosX - z1 * sinX;
+            const z2 = y * sinX + z1 * cosX;
+            
+            const perspective = distance / (distance + z2);
+            
+            return {
+                x: canvas.width / 2 + x1 * zoom * perspective,
+                y: canvas.height / 2 - y1 * zoom * perspective,
+                z: z2
+            };
+        }
+
+        // 生成网格
+        function generateGrid() {
+            const grid = [];
+            const range = 3;
+            const step = (range * 2) / gridSize;
+            
+            for (let i = 0; i <= gridSize; i++) {
+                for (let j = 0; j <= gridSize; j++) {
+                    const x = -range + i * step;
+                    const y = -range + j * step;
+                    const z = surfaceFunction(x, y);
+                    grid.push({ x, y, z, i, j });
+                }
+            }
+            return grid;
+        }
+
+        // 获取颜色
+        function getColor(z, depth) {
+            const normalizedZ = (z / heightScale + 1) / 2;
+            const depthFactor = Math.max(0, 1 - depth / 1000);
+            
+            let r, g, b;
+            if (normalizedZ < 0.5) {
+                const t = normalizedZ * 2;
+                r = Math.floor(75 + t * 63);
+                g = Math.floor(0 + t * 43);
+                b = Math.floor(130 + t * 96);
+            } else {
+                const t = (normalizedZ - 0.5) * 2;
+                r = Math.floor(138 + t * 80);
+                g = Math.floor(43 + t * 69);
+                b = Math.floor(226 + t * 28);
+            }
+            
+            r = Math.floor(r * depthFactor);
+            g = Math.floor(g * depthFactor);
+            b = Math.floor(b * depthFactor);
+            
+            return `rgb(${r}, ${g}, ${b})`;
+        }
+
+        // 绘制
+        function draw() {
+            ctx.fillStyle = 'rgba(10, 0, 20, 1)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            const grid = generateGrid();
+            const faces = [];
+            
+            // 创建面片
+            for (let i = 0; i < gridSize; i++) {
+                for (let j = 0; j < gridSize; j++) {
+                    const idx = i * (gridSize + 1) + j;
+                    const p1 = grid[idx];
+                    const p2 = grid[idx + 1];
+                    const p3 = grid[idx + gridSize + 2];
+                    const p4 = grid[idx + gridSize + 1];
+                    
+                    const proj1 = project3D(p1.x, p1.y, p1.z);
+                    const proj2 = project3D(p2.x, p2.y, p2.z);
+                    const proj3 = project3D(p3.x, p3.y, p3.z);
+                    const proj4 = project3D(p4.x, p4.y, p4.z);
+                    
+                    const avgZ = (proj1.z + proj2.z + proj3.z + proj4.z) / 4;
+                    const avgHeight = (p1.z + p2.z + p3.z + p4.z) / 4;
+                    
+                    faces.push({
+                        points: [proj1, proj2, proj3, proj4],
+                        z: avgZ,
+                        height: avgHeight
+                    });
+                }
+            }
+            
+            // 按深度排序
+            faces.sort((a, b) => b.z - a.z);
+            
+            // 绘制面片
+            ctx.save();
+            faces.forEach(face => {
+                ctx.beginPath();
+                ctx.moveTo(face.points[0].x, face.points[0].y);
+                ctx.lineTo(face.points[1].x, face.points[1].y);
+                ctx.lineTo(face.points[2].x, face.points[2].y);
+                ctx.lineTo(face.points[3].x, face.points[3].y);
+                ctx.closePath();
+                
+                ctx.fillStyle = getColor(face.height, -face.z);
+                ctx.fill();
+                
+                ctx.strokeStyle = 'rgba(138, 43, 226, 0.15)';
+                ctx.lineWidth = 0.5;
+                ctx.stroke();
+            });
+            ctx.restore();
+            
+            // 添加光晕效果
+            const gradient = ctx.createRadialGradient(
+                canvas.width / 2, canvas.height / 2, 0,
+                canvas.width / 2, canvas.height / 2, canvas.width / 2
+            );
+            gradient.addColorStop(0, 'rgba(138, 43, 226, 0)');
+            gradient.addColorStop(0.7, 'rgba(138, 43, 226, 0)');
+            gradient.addColorStop(1, 'rgba(138, 43, 226, 0.1)');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+
+        // 动画循环
+        function animate() {
+            try {
+                animationTime += 0.016;
+                
+                // 双轴自动旋转
+                rotationY += 0.005;
+                rotationX = Math.sin(animationTime * 0.3) * 0.8;
+                
+                draw();
+                
+                // 更新显示
+                document.getElementById('rotationDisplay').textContent = 
+                    Math.floor((rotationY % (Math.PI * 2)) * 180 / Math.PI) + '°';
+                
+                requestAnimationFrame(animate);
+            } catch (error) {
+                console.error('Animation error:', error);
+                requestAnimationFrame(animate);
+            }
+        }
+
+        // 智慧语录系统
+        const wisdoms = [
+            "人生如 z = sin(xy)，起伏由互动而生。",
+            "情绪是函数，不是常数。",
+            "两个变量，才有波面。",
+            "峰谷共存，是自然的秩序。",
+            "控制输入，才能稳定输出。",
+            "不同角度，曲面各异。",
+            "周期是规律，波动是常态。",
+            "复杂，是更高维的秩序。",
+            "低谷，是下一次上升的起点。",
+            "稳定，不等于不变。"
+        ];
+
+        const wisdomDiv = document.querySelector('.wisdom');
+        let wisdomIndex = Math.floor(Math.random() * wisdoms.length);
+
+        function fitWisdomToOneLine() {
+            const padding = 80;
+            const maxWidth = window.innerWidth - padding;
+            const base = window.innerWidth < 768 ? 20 : 24;
+            const min = window.innerWidth < 768 ? 14 : 16;
+            let size = base;
+            wisdomDiv.style.fontSize = size + 'px';
+            while (wisdomDiv.scrollWidth > maxWidth && size > min) {
+                size -= 1;
+                wisdomDiv.style.fontSize = size + 'px';
+            }
+        }
+
+        function setWisdomText(text) {
+            wisdomDiv.style.fontSize = '';
+            wisdomDiv.textContent = text;
+            fitWisdomToOneLine();
+        }
+
+        function fadeIn() {
+            requestAnimationFrame(() => { wisdomDiv.style.opacity = 1; });
+        }
+
+        function fadeOut(callback) {
+            wisdomDiv.style.opacity = 0;
+            setTimeout(callback, 1000);
+        }
+
+        wisdomDiv.style.opacity = 0;
+        setTimeout(() => {
+            setWisdomText(wisdoms[wisdomIndex]);
+            fadeIn();
+        }, 1200);
+
+        function rotateWisdom() {
+            fadeOut(() => {
+                wisdomIndex = (wisdomIndex + 1) % wisdoms.length;
+                setWisdomText(wisdoms[wisdomIndex]);
+                fadeIn();
+            });
+        }
+
+        setInterval(rotateWisdom, 6000);
+        window.addEventListener('resize', () => { fitWisdomToOneLine(); });
+
+        // 启动
+        animate();
+    </script>
+</body>
+</html>

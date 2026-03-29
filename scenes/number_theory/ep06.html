@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EP06 - 黄金余数条纹：斐波那契</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #1a0a0f 0%, #2a1520 50%, #1a0a2a 100%);
+            overflow: hidden;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        .info-container {
+            position: fixed;
+            top: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            text-align: center;
+            z-index: 10;
+            color: white;
+            text-shadow: 0 0 20px rgba(255, 255, 255, 0.5);
+        }
+
+        .title {
+            font-size: 2.8em;
+            font-weight: bold;
+            margin-bottom: 15px;
+            background: linear-gradient(45deg, #FFD700, #FFA500, #FF6B6B);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: gradient-shift 3s ease infinite;
+        }
+
+        .subtitle {
+            font-size: 1em;
+            color: #FFD700;
+            margin-bottom: 8px;
+        }
+
+        .stats {
+            position: fixed;
+            top: 50%;
+            right: 30px;
+            transform: translateY(-50%);
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            font-size: 0.95em;
+            z-index: 10;
+        }
+
+        .stat-item {
+            background: rgba(255, 215, 0, 0.15);
+            padding: 15px 20px;
+            border-radius: 12px;
+            backdrop-filter: blur(10px);
+            border: 2px solid rgba(255, 215, 0, 0.4);
+            min-width: 140px;
+            box-shadow: 0 4px 20px rgba(255, 215, 0, 0.2);
+        }
+
+        .stat-label {
+            font-size: 0.85em;
+            color: #FFB347;
+            margin-bottom: 5px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .stat-value {
+            font-size: 1.8em;
+            font-weight: bold;
+            color: #FFD700;
+            text-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+        }
+
+        .spiral-container {
+            position: fixed;
+            left: 30px;
+            top: 50%;
+            transform: translateY(-50%);
+            z-index: 10;
+        }
+
+        .quote {
+            position: absolute;
+            left: 50%;
+            bottom: 70px;
+            transform: translateX(-50%);
+            max-width: 85vw;
+            white-space: nowrap;
+            overflow: hidden;
+            color: rgba(255, 255, 255, 0.98);
+            font-size: 38px;
+            font-weight: 500;
+            line-height: 1.6;
+            letter-spacing: 0.5px;
+            -webkit-text-stroke: 0.5px rgba(255, 215, 0, 0.3);
+            text-shadow:
+                0 0 2px rgba(255, 215, 0, 0.6),
+                0 0 12px rgba(255, 215, 0, 0.4),
+                0 2px 10px rgba(0, 0, 0, 0.8);
+            text-align: center;
+            user-select: none;
+            pointer-events: none;
+            z-index: 9999;
+            padding: 0 40px;
+            transition: opacity 1.5s ease;
+        }
+
+        @keyframes gradient-shift {
+
+            0%,
+            100% {
+                filter: hue-rotate(0deg);
+            }
+
+            50% {
+                filter: hue-rotate(30deg);
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <canvas id="canvas"></canvas>
+
+    <div class="info-container">
+        <div class="title">黄金余数条纹：斐波那契</div>
+        <div class="subtitle" id="fibInfo">斐波那契数列: 1, 1, 2, 3, 5, 8...</div>
+        <div class="subtitle" style="font-size: 0.85em; color: #FFB347; margin-top: 5px;" id="explanation">
+            每个格子显示 Fib(n) mod m 的余数，观察周期性模式
+        </div>
+    </div>
+
+    <div class="stats">
+        <div class="stat-item">
+            <div class="stat-label">序号</div>
+            <div class="stat-value" id="currentIndex">1</div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-label">数值</div>
+            <div class="stat-value" id="currentValue">1</div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-label">模数</div>
+            <div class="stat-value" id="modulus">10</div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-label">周期</div>
+            <div class="stat-value" id="period">60</div>
+        </div>
+    </div>
+
+    <div class="quote"></div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+
+        // 设置画布大小
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        // 斐波那契数列生成
+        let fibSequence = [1, 1];
+        let fibIndex = 1;
+        const MAX_FIB = 500; // 最多生成500项
+
+        function generateNextFib() {
+            if (fibSequence.length >= MAX_FIB) return;
+            const next = fibSequence[fibSequence.length - 1] + fibSequence[fibSequence.length - 2];
+            fibSequence.push(next);
+        }
+
+        // 当前显示的模数
+        let currentMod = 10;
+        const modValues = [2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 15, 16, 20, 24];
+        let modIndex = 8; // 从mod 10开始
+
+        // 网格配置
+        const cellSize = 25;
+        const cols = Math.floor((canvas.width * 0.7) / cellSize);
+        const rows = Math.floor((canvas.height * 0.55) / cellSize);
+        const gridOffsetX = (canvas.width - cols * cellSize) / 2;
+        const gridOffsetY = canvas.height * 0.3;
+
+        // 余数网格数据
+        let remainderGrid = [];
+
+        // 初始化余数网格
+        function initRemainderGrid() {
+            remainderGrid = [];
+            for (let i = 0; i < Math.min(fibSequence.length, cols * rows); i++) {
+                const remainder = fibSequence[i] % currentMod;
+                remainderGrid.push(remainder);
+            }
+        }
+
+        // 黄金比例
+        const PHI = (1 + Math.sqrt(5)) / 2;
+
+        // 根据余数获取颜色
+        function getColorForRemainder(remainder, mod) {
+            const hue = (remainder / mod) * 360;
+            const saturation = 80 + (remainder / mod) * 20;
+            const lightness = 45 + (remainder / mod) * 25;
+            return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+        }
+
+        // 粒子类
+        class Particle {
+            constructor(x, y, color) {
+                this.x = x;
+                this.y = y;
+                this.vx = (Math.random() - 0.5) * 3;
+                this.vy = (Math.random() - 0.5) * 3 - 2;
+                this.size = Math.random() * 3 + 2;
+                this.color = color;
+                this.life = 1;
+                this.decay = Math.random() * 0.02 + 0.01;
+            }
+
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                this.vy += 0.1; // 重力
+                this.life -= this.decay;
+            }
+
+            draw() {
+                ctx.save();
+                ctx.globalAlpha = this.life;
+                ctx.fillStyle = this.color;
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+
+        const particles = [];
+
+        // 生成粒子
+        function generateParticles(x, y, count, color) {
+            for (let i = 0; i < count; i++) {
+                particles.push(new Particle(x, y, color));
+            }
+        }
+
+        // 绘制余数网格
+        function drawRemainderGrid() {
+            ctx.save();
+
+            for (let i = 0; i < remainderGrid.length; i++) {
+                const row = Math.floor(i / cols);
+                const col = i % cols;
+
+                if (row >= rows) break;
+
+                const x = gridOffsetX + col * cellSize;
+                const y = gridOffsetY + row * cellSize;
+                const remainder = remainderGrid[i];
+                const color = getColorForRemainder(remainder, currentMod);
+
+                // 绘制格子
+                ctx.fillStyle = color;
+                ctx.shadowBlur = 8;
+                ctx.shadowColor = color;
+                ctx.fillRect(x + 2, y + 2, cellSize - 4, cellSize - 4);
+
+                // 最新的几个格子有发光效果
+                if (i >= remainderGrid.length - cols) {
+                    ctx.shadowBlur = 20;
+                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
+                    ctx.lineWidth = 2.5;
+                    ctx.strokeRect(x + 2, y + 2, cellSize - 4, cellSize - 4);
+                }
+
+                // 显示余数数字
+                if (cellSize >= 20 && remainder !== undefined) {
+                    ctx.shadowBlur = 0;
+                    const brightness = (remainder / currentMod);
+                    ctx.fillStyle = brightness < 0.5 ? 'white' : 'rgba(0,0,0,0.8)';
+                    ctx.font = 'bold 11px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(remainder, x + cellSize / 2, y + cellSize / 2);
+                }
+            }
+
+            ctx.restore();
+        }
+
+        // 绘制黄金螺旋
+        function drawGoldenSpiral() {
+            const centerX = canvas.width * 0.12;
+            const centerY = canvas.height * 0.82;
+            const scale = 10;
+
+            ctx.save();
+
+            // 绘制斐波那契方块
+            const fibSquares = [1, 1, 2, 3, 5, 8];
+            let posX = centerX;
+            let posY = centerY;
+            let direction = 0; // 0:右, 1:上, 2:左, 3:下
+
+            ctx.strokeStyle = 'rgba(255, 215, 0, 0.8)';
+            ctx.lineWidth = 2;
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = 'rgba(255, 215, 0, 0.6)';
+
+            for (let i = 0; i < fibSquares.length; i++) {
+                const size = fibSquares[i] * scale;
+
+                ctx.fillStyle = `rgba(255, 215, 0, ${0.1 + i * 0.05})`;
+                ctx.fillRect(posX, posY, size, size);
+                ctx.strokeRect(posX, posY, size, size);
+
+                // 更新位置
+                switch (direction % 4) {
+                    case 0: posX += size; direction++; posY -= size; break;
+                    case 1: direction++; posX -= size; break;
+                    case 2: posY += size; direction++; break;
+                    case 3: posX += size; direction++; break;
+                }
+            }
+
+            // 绘制螺旋曲线
+            ctx.strokeStyle = 'rgba(255, 215, 0, 0.9)';
+            ctx.lineWidth = 3;
+            ctx.shadowBlur = 20;
+            ctx.shadowColor = 'rgba(255, 215, 0, 0.9)';
+
+            ctx.beginPath();
+            let angle = 0;
+            const steps = 150;
+            for (let i = 0; i < steps; i++) {
+                const r = scale * Math.pow(PHI, angle / (Math.PI * 2)) * 0.8;
+                const x = centerX + 7 * scale + r * Math.cos(angle);
+                const y = centerY + r * Math.sin(angle);
+
+                if (i === 0) {
+                    ctx.moveTo(x, y);
+                } else {
+                    ctx.lineTo(x, y);
+                }
+
+                angle += Math.PI / 25;
+            }
+            ctx.stroke();
+
+            // PHI值显示
+            ctx.shadowBlur = 0;
+            ctx.fillStyle = '#FFD700';
+            ctx.font = 'bold 16px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('φ ≈ ' + PHI.toFixed(4), centerX + scale * 3, centerY - scale * 2);
+            ctx.font = '12px Arial';
+            ctx.fillStyle = '#FFB347';
+            ctx.fillText('黄金比例', centerX + scale * 3, centerY - scale * 0.5);
+
+            ctx.restore();
+        }
+
+        // 绘制当前模式提示
+        function drawPatternInfo() {
+            // 简化版：只在网格上方显示当前模式信息
+            const x = canvas.width / 2;
+            const y = gridOffsetY - 30;
+
+            ctx.save();
+            ctx.shadowBlur = 0;
+            ctx.fillStyle = 'rgba(255, 215, 0, 0.9)';
+            ctx.font = 'bold 16px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText(`当前显示：Fibonacci mod ${currentMod} 的余数模式`, x, y);
+
+            ctx.font = '12px Arial';
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+            ctx.fillText(`周期长度：${calculatePisanoPeriod(currentMod)} | 已显示 ${remainderGrid.length} 项`, x, y + 20);
+
+            ctx.restore();
+        }
+
+        // 更新统计信息
+        function updateStats() {
+            document.getElementById('currentIndex').textContent = fibIndex;
+            document.getElementById('currentValue').textContent =
+                fibSequence[fibIndex] > 1e15 ? fibSequence[fibIndex].toExponential(2) : fibSequence[fibIndex];
+            document.getElementById('modulus').textContent = currentMod;
+
+            // 计算Pisano周期（简化版本）
+            const period = calculatePisanoPeriod(currentMod);
+            document.getElementById('period').textContent = period;
+
+            // 更新顶部显示
+            const recentFibs = fibSequence.slice(Math.max(0, fibIndex - 5), fibIndex + 1);
+            document.getElementById('fibInfo').textContent =
+                '斐波那契数列: ...' + recentFibs.join(', ') + '...';
+        }
+
+        // 简化的Pisano周期计算
+        function calculatePisanoPeriod(m) {
+            const limit = m * m + 10;
+            let f1 = 0, f2 = 1;
+
+            for (let i = 0; i < limit; i++) {
+                const temp = (f1 + f2) % m;
+                f1 = f2;
+                f2 = temp;
+
+                if (f1 === 0 && f2 === 1) {
+                    return i + 1;
+                }
+            }
+
+            return limit;
+        }
+
+        // 更新和绘制粒子
+        function updateParticles() {
+            for (let i = particles.length - 1; i >= 0; i--) {
+                particles[i].update();
+                particles[i].draw();
+
+                if (particles[i].life <= 0) {
+                    particles.splice(i, 1);
+                }
+            }
+        }
+
+        // 主动画循环
+        let lastTime = 0;
+        const updateInterval = 150; // 每150ms更新一次
+
+        function animate(currentTime) {
+            // 清空画布
+            ctx.fillStyle = 'rgba(26, 10, 15, 0.3)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // 生成新的斐波那契数
+            if (currentTime - lastTime > updateInterval) {
+                if (fibIndex < fibSequence.length - 1) {
+                    fibIndex++;
+                } else {
+                    generateNextFib();
+                    fibIndex++;
+                }
+
+                // 更新余数网格
+                if (fibIndex < fibSequence.length) {
+                    const remainder = fibSequence[fibIndex] % currentMod;
+                    remainderGrid.push(remainder);
+
+                    // 限制网格大小
+                    if (remainderGrid.length > cols * rows) {
+                        remainderGrid.shift();
+                    }
+
+                    // 生成粒子
+                    const row = Math.floor((remainderGrid.length - 1) / cols);
+                    const col = (remainderGrid.length - 1) % cols;
+                    if (row < rows) {
+                        const x = gridOffsetX + col * cellSize + cellSize / 2;
+                        const y = gridOffsetY + row * cellSize + cellSize / 2;
+                        const color = getColorForRemainder(remainder, currentMod);
+                        generateParticles(x, y, 3, color);
+                    }
+                }
+
+                updateStats();
+                lastTime = currentTime;
+
+                // 每50项切换模数
+                if (fibIndex % 50 === 0 && fibIndex > 0) {
+                    modIndex = (modIndex + 1) % modValues.length;
+                    currentMod = modValues[modIndex];
+                    initRemainderGrid();
+                }
+            }
+
+            // 绘制元素
+            drawRemainderGrid();
+            drawGoldenSpiral();
+            drawPatternInfo();
+            updateParticles();
+
+            requestAnimationFrame(animate);
+        }
+
+        // 初始化
+        initRemainderGrid();
+        updateStats();
+
+        // 启动动画
+        animate(0);
+
+        // 点击效果
+        canvas.addEventListener('click', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+
+            // 检查是否点击了网格
+            if (x >= gridOffsetX && x < gridOffsetX + cols * cellSize &&
+                y >= gridOffsetY && y < gridOffsetY + rows * cellSize) {
+
+                const col = Math.floor((x - gridOffsetX) / cellSize);
+                const row = Math.floor((y - gridOffsetY) / cellSize);
+                const index = row * cols + col;
+
+                if (index < remainderGrid.length) {
+                    const remainder = remainderGrid[index];
+                    const fibValue = fibSequence[index];
+                    const color = getColorForRemainder(remainder, currentMod);
+
+                    generateParticles(
+                        gridOffsetX + col * cellSize + cellSize / 2,
+                        gridOffsetY + row * cellSize + cellSize / 2,
+                        15,
+                        color
+                    );
+                }
+            }
+        });
+
+        // 字幕系统
+        const subtitles = [
+            "斐波那契数列：每个数是前两个数之和",
+            "1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144...",
+            "这个数列隐藏着黄金比例的秘密",
+            "相邻两项的比值趋近于 φ ≈ 1.618",
+            "左下角的黄金螺旋展示了这个比例",
+            "主画面：每个彩色格子是一个斐波那契数",
+            "格子颜色 = 斐波那契数 ÷ 模数的余数",
+            "相同余数显示相同颜色",
+            "观察：余数会形成周期性的重复模式！",
+            "这叫做 Pisano 周期，以数学家命名",
+            "mod 2 周期是 3：1,1,0,1,1,0...",
+            "mod 3 周期是 8，mod 5 周期是 20",
+            "mod 10 周期是 60，看右边统计面板",
+            "每隔 50 项自动切换到新模数",
+            "斐波那契在自然界无处不在",
+            "向日葵、松果、贝壳都遵循这个规律",
+            "简单的递推规则创造出复杂的美",
+            "这就是数学中的黄金之美"
+        ];
+
+        const quoteDiv = document.querySelector('.quote');
+        let subtitleIndex = 0;
+
+        function fitSubtitleToOneLine() {
+            const padding = 80;
+            const maxWidth = window.innerWidth - padding;
+            const base = window.innerWidth < 768 ? 32 : 38;
+            const min = window.innerWidth < 768 ? 26 : 30;
+            let size = base;
+            quoteDiv.style.fontSize = size + 'px';
+            while (quoteDiv.scrollWidth > maxWidth && size > min) {
+                size -= 1;
+                quoteDiv.style.fontSize = size + 'px';
+            }
+        }
+
+        function setSubtitleText(text) {
+            quoteDiv.style.fontSize = '';
+            quoteDiv.textContent = text;
+            fitSubtitleToOneLine();
+        }
+
+        function fadeIn() {
+            requestAnimationFrame(() => { quoteDiv.style.opacity = 1; });
+        }
+
+        function fadeOut(callback) {
+            quoteDiv.style.opacity = 0;
+            setTimeout(callback, 1000);
+        }
+
+        // 初始显示
+        quoteDiv.style.opacity = 0;
+        setTimeout(() => {
+            setSubtitleText(subtitles[subtitleIndex]);
+            fadeIn();
+        }, 1200);
+
+        // 字幕轮换
+        function rotateSubtitle() {
+            fadeOut(() => {
+                subtitleIndex = (subtitleIndex + 1) % subtitles.length;
+                setSubtitleText(subtitles[subtitleIndex]);
+                fadeIn();
+            });
+        }
+
+        setInterval(rotateSubtitle, 5500);
+
+        window.addEventListener('resize', () => {
+            resizeCanvas();
+            // 重新计算网格位置
+            const newCols = Math.floor((canvas.width * 0.7) / cellSize);
+            const newRows = Math.floor((canvas.height * 0.55) / cellSize);
+            if (newCols !== cols || newRows !== rows) {
+                // 如果网格尺寸改变，重新初始化
+                location.reload();
+            }
+            fitSubtitleToOneLine();
+        });
+    </script>
+</body>
+
+</html>

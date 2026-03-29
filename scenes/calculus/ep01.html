@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>玫瑰曲线动画</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #000;
+            overflow: hidden;
+            position: relative;
+        }
+
+        #canvas {
+            display: block;
+        }
+
+        .formula-display {
+            position: absolute;
+            top: 40px;
+            left: 60px;
+            color: white;
+            font-size: 32px;
+            font-weight: 200;
+            letter-spacing: 2px;
+            text-shadow: 0 0 20px rgba(255, 255, 255, 0.5);
+        }
+
+        .formula-display .math {
+            font-family: 'Times New Roman', serif;
+            font-style: italic;
+            font-weight: 300;
+        }
+
+        .parameter-display {
+            position: absolute;
+            top: 100px;
+            left: 60px;
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 24px;
+            font-weight: 300;
+        }
+
+        .parameter-value {
+            color: #ff69b4;
+            font-weight: 400;
+            text-shadow: 0 0 10px rgba(255, 105, 180, 0.8);
+        }
+    </style>
+
+<style>
+/* --- Wisdom overlay (non-intrusive) --- */
+.wisdom {
+  position: absolute;
+  left: 60px;
+  right: 60px;
+  bottom: 60px;
+  max-width: 72ch;
+  color: rgba(255,255,255,0.95);
+  font-size: 20px;
+  font-weight: 300;
+  line-height: 1.6;
+  letter-spacing: 0.2px;
+  text-shadow: 0 2px 10px rgba(0,0,0,0.45);
+  user-select: none;
+  pointer-events: none; /* do not block interactions */
+  z-index: 9999;        /* overlay above canvas/plots without touching layout */
+}
+.wisdom div + div { margin-top: 6px; opacity: 0.95; }
+@media (max-width: 768px) {
+  .wisdom { left: 16px; right: 16px; bottom: 24px; font-size: 16px; }
+}
+</style>
+
+</head>
+<body>
+    <canvas id="canvas"></canvas>
+    
+    <div class="formula-display">
+        <span class="math">r = a · sin(kθ)</span>
+    </div>
+    <div class="parameter-display">
+        k = <span class="parameter-value" id="k-value">0.00</span>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const kValueDisplay = document.getElementById('k-value');
+
+        // 设置画布大小
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        // 动画参数
+        let animationTime = 0;
+        let k = 0;
+        let a = Math.min(canvas.width, canvas.height) * 0.3;
+
+        // 绘制渐变背景
+        function drawBackground() {
+            const gradient = ctx.createRadialGradient(
+                canvas.width / 2, canvas.height / 2, 0,
+                canvas.width / 2, canvas.height / 2, Math.max(canvas.width, canvas.height)
+            );
+            
+            const hue = (animationTime * 20) % 360;
+            gradient.addColorStop(0, `hsla(${hue}, 50%, 10%, 1)`);
+            gradient.addColorStop(0.5, `hsla(${hue + 60}, 40%, 5%, 1)`);
+            gradient.addColorStop(1, 'rgba(0, 0, 0, 1)');
+            
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+
+        // 绘制玫瑰曲线
+        function drawRoseCurve() {
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+            
+            ctx.save();
+            ctx.translate(centerX, centerY);
+            
+            // 设置绘制样式
+            ctx.strokeStyle = `hsla(${330 + k * 10}, 70%, 60%, 0.9)`;
+            ctx.lineWidth = 3;
+            ctx.lineCap = 'round';
+            ctx.shadowBlur = 20;
+            ctx.shadowColor = `hsla(${330 + k * 10}, 70%, 60%, 0.5)`;
+            
+            // 绘制曲线
+            ctx.beginPath();
+            const steps = 1000;
+            let isFirstPoint = true;
+            
+            for (let i = 0; i <= steps; i++) {
+                const theta = (i / steps) * Math.PI * 2 * (k % 2 === 0 ? Math.ceil(k) || 1 : 2 * Math.ceil(k));
+                const r = a * Math.sin(k * theta);
+                const x = r * Math.cos(theta);
+                const y = r * Math.sin(theta);
+                
+                if (isFirstPoint) {
+                    ctx.moveTo(x, y);
+                    isFirstPoint = false;
+                } else {
+                    ctx.lineTo(x, y);
+                }
+            }
+            
+            ctx.stroke();
+            
+            // 添加辉光效果
+            ctx.globalAlpha = 0.3;
+            ctx.lineWidth = 8;
+            ctx.stroke();
+            
+            ctx.globalAlpha = 0.1;
+            ctx.lineWidth = 20;
+            ctx.stroke();
+            
+            ctx.restore();
+        }
+
+        // 主动画循环
+        function animate() {
+            // 清除画布并绘制背景
+            drawBackground();
+            
+            // 更新k值（从0到5循环）
+            animationTime += 0.02;
+            k = (Math.sin(animationTime * 0.1) + 1) * 2.5; // 0-5之间平滑变化
+            
+            // 更新显示
+            kValueDisplay.textContent = k.toFixed(2);
+            
+            // 绘制玫瑰曲线
+            drawRoseCurve();
+            
+            requestAnimationFrame(animate);
+        }
+
+        // 启动动画
+        animate();
+    </script>
+
+<!-- Wisdom overlay -->
+<div class="wisdom">
+  <div>没有哪一步白走，每一步都在拟合你的人生。</div>
+  <div>愿你的人生，不止稳定收敛，也偶尔跃迁。</div>
+</div>
+
+</body>
+</html>

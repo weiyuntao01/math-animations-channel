@@ -1,0 +1,673 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EP02 - 模运算彩虹：乘法表余数</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background: radial-gradient(circle at 25% 25%, #13073a 0%, #050315 45%, #04020d 100%);
+            color: #eef7ff;
+            height: 100vh;
+            width: 100vw;
+            overflow: hidden;
+        }
+
+        .layout {
+            display: flex;
+            height: 100%;
+            width: 100%;
+        }
+
+        .visual-pane {
+            position: relative;
+            flex: 0 0 60%;
+            min-width: 400px;
+            height: 100%;
+        }
+
+        #canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        .text-pane {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 28px;
+            padding: 48px 52px;
+            background: rgba(6, 10, 28, 0.8);
+            border-left: 1px solid rgba(120, 150, 255, 0.16);
+            backdrop-filter: blur(18px);
+        }
+
+        .panel-header {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            max-width: 520px;
+        }
+
+        .title {
+            font-size: 2.4em;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            background: linear-gradient(120deg, #0ff7ff, #a16bff, #ffe27a);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: hueShift 5s ease-in-out infinite alternate;
+        }
+
+        .subtitle {
+            font-size: 1.05em;
+            color: #9cd4ff;
+        }
+
+        .description {
+            font-size: 0.98em;
+            line-height: 1.65;
+            color: #dbe7ff;
+        }
+
+        .metric-board {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(160px, 1fr));
+            gap: 18px 22px;
+            max-width: 520px;
+        }
+
+        .metric-card {
+            padding: 14px 18px;
+            border-radius: 14px;
+            background: rgba(12, 22, 52, 0.6);
+            border: 1px solid rgba(90, 150, 255, 0.2);
+            box-shadow: 0 12px 28px rgba(8, 12, 32, 0.32);
+        }
+
+        .metric-label {
+            color: #7ea0ff;
+            font-size: 0.82em;
+            margin-bottom: 6px;
+        }
+
+        .metric-value {
+            font-size: 1.38em;
+            font-weight: 600;
+            color: #66f2ff;
+        }
+
+        .insight {
+            margin-top: 10px;
+            font-size: 0.95em;
+            line-height: 1.65;
+            color: #ffe6f5;
+            text-shadow: 0 0 8px rgba(255, 120, 200, 0.26);
+            min-height: 1.6em;
+        }
+
+        .script-section {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .section-title {
+            font-size: 1.05em;
+            font-weight: 600;
+            color: #9cd4ff;
+            letter-spacing: 0.4px;
+        }
+
+        .subtitle-list {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            padding: 0;
+            margin: 0;
+        }
+
+        .subtitle-item {
+            display: grid;
+            grid-template-columns: 120px 1fr;
+            gap: 14px;
+            padding: 10px 14px;
+            border-radius: 10px;
+            background: rgba(12, 22, 48, 0.48);
+            border: 1px solid rgba(120, 150, 255, 0.16);
+        }
+
+        .subtitle-time {
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            color: #8ab8ff;
+        }
+
+        .subtitle-text {
+            font-size: 0.95em;
+            line-height: 1.55;
+            color: #edf4ff;
+        }
+
+        .caption-panel {
+            margin-top: auto;
+            padding: 18px 20px;
+            border-radius: 12px;
+            background: rgba(8, 18, 40, 0.65);
+            border: 1px solid rgba(110, 150, 255, 0.22);
+            box-shadow: 0 18px 36px rgba(4, 8, 24, 0.42);
+        }
+
+        .caption-label {
+            font-size: 0.86em;
+            color: #7fa8ff;
+            margin-bottom: 6px;
+        }
+
+        .quote {
+            color: rgba(240, 245, 255, 0.96);
+            font-size: 28px;
+            font-weight: 500;
+            line-height: 1.45;
+            letter-spacing: 0.3px;
+            -webkit-text-stroke: 0.3px rgba(90, 150, 255, 0.22);
+            text-shadow:
+                0 0 3px rgba(70, 140, 255, 0.42),
+                0 0 12px rgba(130, 90, 255, 0.28),
+                0 4px 12px rgba(0, 0, 0, 0.42);
+            transition: opacity 1.2s ease;
+            min-height: 68px;
+        }
+
+        @keyframes hueShift {
+            0% {
+                filter: hue-rotate(0deg);
+            }
+
+            100% {
+                filter: hue-rotate(22deg);
+            }
+        }
+
+        @media (max-width: 1200px) {
+            .layout {
+                flex-direction: column;
+            }
+
+            .visual-pane {
+                flex: none;
+                width: 100%;
+                height: 54vh;
+                min-width: 0;
+            }
+
+            .text-pane {
+                padding: 36px 32px 40px;
+            }
+
+            .subtitle-item {
+                grid-template-columns: 110px 1fr;
+            }
+        }
+
+        @media (max-width: 720px) {
+            .metric-board {
+                grid-template-columns: repeat(1, minmax(160px, 1fr));
+            }
+
+            .quote {
+                font-size: 24px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="layout">
+        <div class="visual-pane">
+            <canvas id="canvas"></canvas>
+        </div>
+        <div class="text-pane">
+            <div class="panel-header">
+                <div class="title">模运算彩虹：乘法表余数</div>
+                <div class="subtitle" id="rangeInfo">当前模数：12</div>
+                <p class="description">
+                    把 1 到模数的乘法结果写进余数表，同一余数使用同一色调。随着模数切换、行列聚焦，色块排列会显露余数循环与重复的节奏。
+                </p>
+            </div>
+
+            <div class="metric-board">
+                <div class="metric-card">
+                    <div class="metric-label">当前模数</div>
+                    <div class="metric-value" id="modulusDisplay">12</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">不同余数个数</div>
+                    <div class="metric-value" id="layerDisplay">0</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">重复率</div>
+                    <div class="metric-value" id="repeatRatio">0%</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">当前主题</div>
+                    <div class="metric-value" id="structureBand">钟面与音阶</div>
+                </div>
+            </div>
+
+            <div class="insight" id="insightText">正在生成模 12 的乘法余数表，请稍候……</div>
+
+            <div class="script-section">
+                <div class="section-title">字幕脚本（00:00-03:00）</div>
+                <ul class="subtitle-list" id="subtitleList"></ul>
+            </div>
+
+            <div class="caption-panel">
+                <div class="caption-label">当前字幕</div>
+                <div class="quote"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const visualPane = document.querySelector('.visual-pane');
+        const textPane = document.querySelector('.text-pane');
+        const subtitleList = document.getElementById('subtitleList');
+
+        const gridLayout = {
+            cellSize: 0,
+            startX: 0,
+            startY: 0,
+            sizePx: 0
+        };
+
+        const modulusSequence = [
+            { value: 12, descriptor: '钟面与音阶', duration: 42000 },
+            { value: 17, descriptor: '质数模的均匀光谱', duration: 36000 },
+            { value: 24, descriptor: '晶格重复的谐波', duration: 42000 }
+        ];
+
+        let currentSequenceIndex = 0;
+        let modulus = modulusSequence[currentSequenceIndex].value;
+        let lastModulusSwitch = 0;
+
+        const gridCells = [];
+        let cellLookup = [];
+        let hoveredCell = null;
+        let phaseShift = 0;
+        let rowFocus = 1;
+        let colFocus = 1;
+
+        function resizeCanvas() {
+            canvas.width = visualPane.clientWidth;
+            canvas.height = visualPane.clientHeight;
+            updateGridLayout();
+        }
+
+        function updateGridLayout() {
+            const gridPixelSize = Math.min(canvas.width, canvas.height) * 0.82;
+            gridLayout.cellSize = gridPixelSize / modulus;
+            gridLayout.startX = (canvas.width - gridPixelSize) / 2;
+            gridLayout.startY = (canvas.height - gridPixelSize) / 2;
+            gridLayout.sizePx = gridPixelSize;
+        }
+
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        function rebuildGrid() {
+            gridCells.length = 0;
+            cellLookup = Array.from({ length: modulus }, () => Array(modulus).fill(null));
+            for (let row = 1; row <= modulus; row++) {
+                for (let col = 1; col <= modulus; col++) {
+                    const remainder = (row * col) % modulus;
+                    const cell = {
+                        row,
+                        col,
+                        remainder,
+                        remainderRatio: remainder / modulus
+                    };
+                    gridCells.push(cell);
+                    cellLookup[row - 1][col - 1] = cell;
+                }
+            }
+            updateGridLayout();
+            document.getElementById('modulusDisplay').textContent = modulus;
+            document.getElementById('rangeInfo').textContent = `当前模数：${modulus}`;
+            document.getElementById('structureBand').textContent = modulusSequence[currentSequenceIndex].descriptor;
+        }
+
+        rebuildGrid();
+
+        function switchModulus(index) {
+            currentSequenceIndex = index % modulusSequence.length;
+            modulus = modulusSequence[currentSequenceIndex].value;
+            phaseShift = 0;
+            rowFocus = 1;
+            colFocus = 1;
+            rebuildGrid();
+        }
+
+        function drawBackground(time) {
+            const gradient = ctx.createRadialGradient(
+                canvas.width * 0.32 + Math.sin(time * 0.00035) * canvas.width * 0.12,
+                canvas.height * 0.34 + Math.cos(time * 0.00028) * canvas.height * 0.1,
+                80,
+                canvas.width / 2,
+                canvas.height / 2,
+                Math.max(canvas.width, canvas.height) * 0.8
+            );
+            gradient.addColorStop(0, 'rgba(18, 12, 50, 0.85)');
+            gradient.addColorStop(0.55, 'rgba(6, 10, 34, 0.88)');
+            gradient.addColorStop(1, 'rgba(2, 4, 14, 0.94)');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+
+        function drawLatticePulseGrid(time) {
+            ctx.save();
+            ctx.translate(gridLayout.startX, gridLayout.startY);
+            ctx.globalCompositeOperation = 'screen';
+
+            const pulse = Math.sin(time * 0.001) * 0.5 + 0.5;
+            const glowAlpha = 0.1 + pulse * 0.14;
+            ctx.strokeStyle = `rgba(120, 170, 255, ${glowAlpha})`;
+            ctx.lineWidth = 1;
+
+            ctx.beginPath();
+            for (let i = 0; i <= modulus; i++) {
+                const offset = i * gridLayout.cellSize;
+                ctx.moveTo(offset, 0);
+                ctx.lineTo(offset, gridLayout.sizePx);
+                ctx.moveTo(0, offset);
+                ctx.lineTo(gridLayout.sizePx, offset);
+            }
+            ctx.stroke();
+            ctx.restore();
+        }
+
+        function drawNumberSpiralCollider(time) {
+            ctx.save();
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+            ctx.translate(centerX, centerY);
+            ctx.globalCompositeOperation = 'lighter';
+
+            const radius = gridLayout.sizePx * 0.58;
+            const sweep = (Math.sin(time * 0.0007) * 0.5 + 0.5) * Math.PI * 2;
+
+            ctx.strokeStyle = 'rgba(170, 140, 255, 0.24)';
+            ctx.lineWidth = 1.4 + Math.sin(time * 0.001) * 0.8;
+            ctx.beginPath();
+            ctx.arc(0, 0, radius * 0.72, 0, sweep);
+            ctx.stroke();
+
+            for (let i = 0; i < 4; i++) {
+                const angle = i * Math.PI / 2 + time * 0.0004;
+                ctx.strokeStyle = `rgba(80, 220, 255, ${0.16 + 0.12 * Math.sin(time * 0.0012 + i)})`;
+                ctx.beginPath();
+                ctx.moveTo(0, 0);
+                ctx.lineTo(Math.cos(angle) * radius, Math.sin(angle) * radius);
+                ctx.stroke();
+            }
+
+            ctx.restore();
+        }
+
+        function drawModularRainbow(time) {
+            ctx.save();
+            ctx.translate(gridLayout.startX, gridLayout.startY);
+
+            const shimmer = Math.sin(time * 0.002 + phaseShift) * 0.06;
+            const layerSwing = Math.sin(time * 0.0008) * 0.5 + 0.5;
+
+            gridCells.forEach(cell => {
+                const colIndex = cell.col - 1;
+                const rowIndex = cell.row - 1;
+                const x = colIndex * gridLayout.cellSize;
+                const y = rowIndex * gridLayout.cellSize;
+
+                const hueBase = (cell.remainder / modulus) * 360;
+                const hue = (hueBase + shimmer * 360) % 360;
+                const saturation = 60 + 18 * Math.sin(layerSwing + cell.remainderRatio * Math.PI * 2);
+                const lightness = 36 + 10 * Math.cos(phaseShift + cell.remainderRatio * Math.PI * 2);
+
+                ctx.fillStyle = `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+                ctx.fillRect(x, y, gridLayout.cellSize + 0.4, gridLayout.cellSize + 0.4);
+            });
+
+            ctx.restore();
+        }
+
+        function drawPrimeGlowField(time, rowSet, colSet) {
+            ctx.save();
+            ctx.globalCompositeOperation = 'lighter';
+            const pulse = Math.sin(time * 0.004) * 0.5 + 0.5;
+
+            const highlighted = gridCells.filter(cell => {
+                if (cell.remainder === 0) return true;
+                if (rowSet.has(cell.remainder) && cell.col === colFocus) return true;
+                if (colSet.has(cell.remainder) && cell.row === rowFocus) return true;
+                return cell.row === cell.col || cell.row + cell.col === modulus + 1;
+            }).slice(-150);
+
+            highlighted.forEach(point => {
+                const colIndex = point.col - 1;
+                const rowIndex = point.row - 1;
+                const cx = gridLayout.startX + (colIndex + 0.5) * gridLayout.cellSize;
+                const cy = gridLayout.startY + (rowIndex + 0.5) * gridLayout.cellSize;
+                const radius = gridLayout.cellSize * (0.5 + pulse * 0.35 + point.remainderRatio * 0.3);
+                const gradient = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius);
+
+                gradient.addColorStop(0, `rgba(255, 250, 210, ${0.32 + pulse * 0.22})`);
+                gradient.addColorStop(0.6, `rgba(120, 210, 255, ${0.16 + pulse * 0.12})`);
+                gradient.addColorStop(1, 'rgba(20, 40, 80, 0)');
+
+                ctx.fillStyle = gradient;
+                ctx.beginPath();
+                ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+                ctx.fill();
+            });
+
+            ctx.restore();
+        }
+
+        function drawHoverCell(time) {
+            if (!hoveredCell) return;
+            ctx.save();
+            ctx.translate(gridLayout.startX, gridLayout.startY);
+            const colIndex = hoveredCell.col - 1;
+            const rowIndex = hoveredCell.row - 1;
+
+            const pulse = Math.sin(time * 0.01) * 0.5 + 0.5;
+            ctx.lineWidth = 1.6;
+            ctx.strokeStyle = 'rgba(255, 255, 220, 0.82)';
+            ctx.strokeRect(
+                colIndex * gridLayout.cellSize + 1,
+                rowIndex * gridLayout.cellSize + 1,
+                gridLayout.cellSize - 2,
+                gridLayout.cellSize - 2
+            );
+
+            ctx.globalAlpha = 0.1 + pulse * 0.14;
+            ctx.fillStyle = 'rgba(255, 255, 200, 0.28)';
+            ctx.fillRect(
+                colIndex * gridLayout.cellSize,
+                rowIndex * gridLayout.cellSize,
+                gridLayout.cellSize,
+                gridLayout.cellSize
+            );
+
+            ctx.restore();
+        }
+
+        function updateStatsDisplay(rowSet, colSet) {
+            const combined = new Set([...rowSet, ...colSet]);
+            const layerCount = combined.size;
+            const repeatRate = 1 - (layerCount / modulus);
+
+            document.getElementById('layerDisplay').textContent = layerCount.toString();
+            document.getElementById('repeatRatio').textContent = `${(repeatRate * 100).toFixed(1)}%`;
+
+            const insight = document.getElementById('insightText');
+            if (hoveredCell) {
+                const { row, col, remainder } = hoveredCell;
+                const hue = (remainder / modulus * 360).toFixed(1);
+                insight.textContent = `${row} × ${col} = ${row * col}，除以 ${modulus} 的余数是 ${remainder}（色相 ${hue}°）。`;
+            } else {
+                insight.textContent = `正聚焦第 ${rowFocus} 行与第 ${colFocus} 列，共看到 ${layerCount} 种不同余数，重复率 ${(repeatRate * 100).toFixed(1)}%。`;
+            }
+        }
+
+        const quoteDiv = document.querySelector('.quote');
+        const captions = [
+            { start: 0, end: 8, text: '把乘法表写进模运算格，同一余数涂成同一颜色，彩虹从 0 号格点铺开。' },
+            { start: 8, end: 45, text: '切换模数 12、17、24 时，整列整行的色块在移动，规律像钟面和音阶的拍点。' },
+            { start: 45, end: 105, text: '统计面板实时记录出现了多少种余数、重复率有多高，行列聚焦帮助定位对称纹理。' },
+            { start: 105, end: 180, text: '这些余数图案被用于时钟同步、加密 S 盒和音乐调制，用视觉记住模运算的秩序感。' }
+        ];
+
+        const timelineBeats = captions.map((cap, index) => {
+            const prevEnd = index === 0 ? 0 : captions[index - 1].end;
+            return {
+                duration: (cap.end - prevEnd) * 1000,
+                text: cap.text
+            };
+        });
+
+        function formatTime(seconds) {
+            const m = String(Math.floor(seconds / 60)).padStart(2, '0');
+            const s = String(Math.floor(seconds % 60)).padStart(2, '0');
+            return `${m}:${s}`;
+        }
+
+        function populateSubtitleList() {
+            subtitleList.innerHTML = '';
+            captions.forEach(cap => {
+                const item = document.createElement('li');
+                item.className = 'subtitle-item';
+                item.innerHTML = `
+                    <span class="subtitle-time">${formatTime(cap.start)}-${formatTime(cap.end)}</span>
+                    <span class="subtitle-text">${cap.text}</span>
+                `;
+                subtitleList.appendChild(item);
+            });
+        }
+
+        function fitQuote() {
+            const padding = 60;
+            const maxWidth = (textPane.clientWidth || window.innerWidth) - padding;
+            let size = textPane.clientWidth < 520 ? 26 : 28;
+            const min = 22;
+            quoteDiv.style.fontSize = size + 'px';
+            while (quoteDiv.scrollWidth > maxWidth && size > min) {
+                size -= 1;
+                quoteDiv.style.fontSize = size + 'px';
+            }
+        }
+
+        function setQuote(text) {
+            quoteDiv.style.opacity = 0;
+            setTimeout(() => {
+                quoteDiv.textContent = text;
+                fitQuote();
+                quoteDiv.style.opacity = 1;
+            }, 250);
+        }
+
+        function beginTimeline() {
+            if (!timelineBeats.length) return;
+            setQuote(timelineBeats[0].text);
+            let accumulated = timelineBeats[0].duration;
+            for (let i = 1; i < timelineBeats.length; i++) {
+                setTimeout(() => {
+                    setQuote(timelineBeats[i].text);
+                }, accumulated);
+                accumulated += timelineBeats[i].duration;
+            }
+        }
+
+        populateSubtitleList();
+        fitQuote();
+        beginTimeline();
+        window.addEventListener('resize', fitQuote);
+
+        canvas.addEventListener('mousemove', (event) => {
+            const rect = canvas.getBoundingClientRect();
+            const x = event.clientX - rect.left;
+            const y = event.clientY - rect.top;
+            const col = Math.floor((x - gridLayout.startX) / gridLayout.cellSize);
+            const row = Math.floor((y - gridLayout.startY) / gridLayout.cellSize);
+            if (row >= 0 && row < modulus && col >= 0 && col < modulus) {
+                hoveredCell = cellLookup[row][col];
+            } else {
+                hoveredCell = null;
+            }
+        });
+
+        canvas.addEventListener('mouseleave', () => {
+            hoveredCell = null;
+        });
+
+        canvas.addEventListener('click', () => {
+            if (!hoveredCell) return;
+            const { row, col, remainder } = hoveredCell;
+            const hue = (remainder / modulus * 360).toFixed(1);
+            const insight = document.getElementById('insightText');
+            insight.textContent = `手动标记：${row} × ${col} = ${row * col}，除以 ${modulus} 的余数是 ${remainder}（色相 ${hue}°）。`;
+        });
+
+        let lastTime = 0;
+
+        function animate(time) {
+            const delta = time - lastTime;
+            lastTime = time;
+
+            if (time - lastModulusSwitch > modulusSequence[currentSequenceIndex].duration) {
+                lastModulusSwitch = time;
+                switchModulus(currentSequenceIndex + 1);
+            }
+
+            phaseShift += delta * 0.00032;
+            rowFocus = (Math.floor(time * 0.0006) % modulus) + 1;
+            colFocus = (Math.floor(time * 0.00045) % modulus) + 1;
+
+            const rowCells = cellLookup[rowFocus - 1] || [];
+            const rowSet = new Set(rowCells.map(cell => cell.remainder));
+            const colSet = new Set();
+            cellLookup.forEach(rowArr => {
+                const cell = rowArr[colFocus - 1];
+                if (cell) colSet.add(cell.remainder);
+            });
+
+            drawBackground(time);
+            drawLatticePulseGrid(time);
+            drawNumberSpiralCollider(time);
+            drawModularRainbow(time);
+            drawPrimeGlowField(time, rowSet, colSet);
+            drawHoverCell(time);
+            updateStatsDisplay(rowSet, colSet);
+
+            requestAnimationFrame(animate);
+        }
+
+        animate(0);
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>李萨如曲线：Lissajous</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #000;
+            overflow: hidden;
+            position: relative;
+        }
+
+        #canvas {
+            display: block;
+        }
+
+        .formula-display {
+            position: absolute;
+            top: 40px;
+            left: 60px;
+            color: white;
+            font-size: 28px;
+            font-weight: 200;
+            letter-spacing: 2px;
+            text-shadow: 0 0 20px rgba(255, 255, 255, 0.5);
+        }
+
+        .formula-display .math {
+            font-family: 'Times New Roman', serif;
+            font-style: italic;
+            font-weight: 300;
+        }
+
+        .parameter-display {
+            position: absolute;
+            top: 130px;
+            left: 180px;
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 22px;
+            font-weight: 300;
+        }
+
+        .parameter-value {
+            color: #00bcd4;
+            font-weight: 400;
+            text-shadow: 0 0 10px rgba(0, 188, 212, 0.8);
+        }
+
+        .secondary-param {
+            position: absolute;
+            top: 170px;
+            left: 180px;
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 20px;
+            font-weight: 300;
+        }
+
+        .secondary-value {
+            color: #ff6b35;
+            font-weight: 400;
+            text-shadow: 0 0 8px rgba(255, 107, 53, 0.6);
+        }
+
+        .wisdom {
+            position: absolute;
+            left: 60px;
+            right: 60px;
+            bottom: 60px;
+            max-width: 72ch;
+            color: rgba(255, 255, 255, 0.95);
+            font-size: 20px;
+            font-weight: 300;
+            line-height: 1.6;
+            letter-spacing: 0.2px;
+            text-shadow: 0 2px 10px rgba(0, 0, 0, 0.45);
+            user-select: none;
+            pointer-events: none;
+            z-index: 9999;
+        }
+
+        .wisdom div+div {
+            margin-top: 6px;
+            opacity: 0.95;
+        }
+
+        @media (max-width: 768px) {
+            .wisdom {
+                left: 16px;
+                right: 16px;
+                bottom: 24px;
+                font-size: 16px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <canvas id="canvas"></canvas>
+
+    <div class="formula-display">
+        <div class="math">x = A sin(a·ωt + φ)</div>
+        <div class="math">y = B sin(b·ωt)</div>
+    </div>
+    <div class="parameter-display">
+        频率比 = <span class="parameter-value" id="ratio-value">1:1</span>
+    </div>
+    <div class="secondary-param">
+        相位差 = <span class="secondary-value" id="phase-value">0°</span>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const ratioValueDisplay = document.getElementById('ratio-value');
+        const phaseValueDisplay = document.getElementById('phase-value');
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        let animationTime = 0;
+        let phase = 0;
+        let a = 1, b = 1;
+        let A = 150, B = 150;
+        let completeTrail = []; // 存储完整的曲线轨迹
+
+        // 频率比预设
+        const ratioPresets = [
+            { a: 1, b: 1 },
+            { a: 2, b: 1 },
+            { a: 3, b: 2 },
+            { a: 4, b: 3 },
+            { a: 5, b: 4 }
+        ];
+        let currentRatioIndex = 0;
+        let phaseProgress = 0; // 0到1，表示相位从-π到π的进度
+
+        // 生成完整的李萨如曲线
+        function generateCompleteCurve(a, b, phase, steps = 500) {
+            const points = [];
+            const cycleCount = Math.max(a, b) * 2; // 确保完整周期
+            for (let i = 0; i <= steps; i++) {
+                const t = (i / steps) * Math.PI * 2 * cycleCount;
+                const x = A * Math.sin(a * t + phase);
+                const y = B * Math.sin(b * t);
+                points.push({ x, y });
+            }
+            return points;
+        }
+
+        function drawBackground() {
+            const gradient = ctx.createRadialGradient(
+                canvas.width / 2, canvas.height / 2, 0,
+                canvas.width / 2, canvas.height / 2, Math.max(canvas.width, canvas.height)
+            );
+
+            const hue = (animationTime * 8) % 360;
+            gradient.addColorStop(0, `hsla(${hue + 200}, 50%, 10%, 1)`);
+            gradient.addColorStop(0.5, `hsla(${hue + 220}, 40%, 5%, 1)`);
+            gradient.addColorStop(1, 'rgba(0, 0, 20, 1)');
+
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+
+        // 绘制X轴正弦波（顶部）
+        function drawXSineWave() {
+            const centerX = canvas.width / 2;
+            const topY = 80;
+            const waveLength = Math.min(canvas.width * 0.7, 600);
+            const waveHeight = 40;
+
+            ctx.save();
+
+            // 绘制坐标轴
+            ctx.strokeStyle = 'rgba(0, 188, 212, 0.3)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(centerX - waveLength / 2, topY);
+            ctx.lineTo(centerX + waveLength / 2, topY);
+            ctx.stroke();
+
+            // 绘制正弦波（显示多个周期）
+            ctx.strokeStyle = 'rgba(0, 188, 212, 0.7)';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+
+            const cycleCount = Math.max(a, b) * 2;
+            for (let i = 0; i <= 200; i++) {
+                const t = (i / 200) * Math.PI * 2 * cycleCount;
+                const x = centerX - waveLength / 2 + (i / 200) * waveLength;
+                const y = topY - Math.sin(a * t + phase) * waveHeight;
+
+                if (i === 0) {
+                    ctx.moveTo(x, y);
+                } else {
+                    ctx.lineTo(x, y);
+                }
+            }
+            ctx.stroke();
+
+            // 绘制动画点（随时间移动）
+            const animT = (animationTime * 2) % (Math.PI * 2 * cycleCount);
+            const animProgress = animT / (Math.PI * 2 * cycleCount);
+            const currentX = centerX - waveLength / 2 + animProgress * waveLength;
+            const currentY = topY - Math.sin(a * animT + phase) * waveHeight;
+
+            ctx.fillStyle = '#00bcd4';
+            ctx.shadowBlur = 20;
+            ctx.shadowColor = '#00bcd4';
+            ctx.beginPath();
+            ctx.arc(currentX, currentY, 6, 0, Math.PI * 2);
+            ctx.fill();
+
+            // 绘制垂直投影线到中心
+            ctx.strokeStyle = 'rgba(0, 188, 212, 0.3)';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([5, 5]);
+            ctx.beginPath();
+            ctx.moveTo(currentX, currentY);
+            ctx.lineTo(currentX, canvas.height / 2);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            // 标签
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+            ctx.font = '14px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('x = A sin(a·ωt + φ)', centerX, topY - waveHeight - 15);
+
+            ctx.restore();
+
+            return A * Math.sin(a * animT + phase);
+        }
+
+        // 绘制Y轴正弦波（左侧）
+        function drawYSineWave() {
+            const centerY = canvas.height / 2;
+            const leftX = 80;
+            const waveLength = Math.min(canvas.height * 0.5, 400);
+            const waveHeight = 40;
+
+            ctx.save();
+
+            // 绘制坐标轴
+            ctx.strokeStyle = 'rgba(255, 107, 53, 0.3)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(leftX, centerY - waveLength / 2);
+            ctx.lineTo(leftX, centerY + waveLength / 2);
+            ctx.stroke();
+
+            // 绘制正弦波（显示多个周期）
+            ctx.strokeStyle = 'rgba(255, 107, 53, 0.7)';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+
+            const cycleCount = Math.max(a, b) * 2;
+            for (let i = 0; i <= 200; i++) {
+                const t = (i / 200) * Math.PI * 2 * cycleCount;
+                const y = centerY - waveLength / 2 + (i / 200) * waveLength;
+                const x = leftX + Math.sin(b * t) * waveHeight;
+
+                if (i === 0) {
+                    ctx.moveTo(x, y);
+                } else {
+                    ctx.lineTo(x, y);
+                }
+            }
+            ctx.stroke();
+
+            // 绘制动画点（随时间移动）
+            const animT = (animationTime * 2) % (Math.PI * 2 * cycleCount);
+            const animProgress = animT / (Math.PI * 2 * cycleCount);
+            const currentY = centerY - waveLength / 2 + animProgress * waveLength;
+            const currentX = leftX + Math.sin(b * animT) * waveHeight;
+
+            ctx.fillStyle = '#ff6b35';
+            ctx.shadowBlur = 20;
+            ctx.shadowColor = '#ff6b35';
+            ctx.beginPath();
+            ctx.arc(currentX, currentY, 6, 0, Math.PI * 2);
+            ctx.fill();
+
+            // 绘制水平投影线到中心
+            ctx.strokeStyle = 'rgba(255, 107, 53, 0.3)';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([5, 5]);
+            ctx.beginPath();
+            ctx.moveTo(currentX, currentY);
+            ctx.lineTo(canvas.width / 2, currentY);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            // 标签
+            ctx.save();
+            ctx.translate(leftX - waveHeight - 15, centerY);
+            ctx.rotate(-Math.PI / 2);
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+            ctx.font = '14px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('y = B sin(b·ωt)', 0, 0);
+            ctx.restore();
+
+            ctx.restore();
+
+            return B * Math.sin(b * animT);
+        }
+
+        // 绘制中心的李萨如曲线
+        function drawLissajousCurve() {
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+
+            ctx.save();
+            ctx.translate(centerX, centerY);
+
+            // 绘制完整的李萨如曲线
+            if (completeTrail.length > 1) {
+                for (let i = 1; i < completeTrail.length; i++) {
+                    const point = completeTrail[i];
+                    const prevPoint = completeTrail[i - 1];
+                    const progress = i / completeTrail.length;
+
+                    // 颜色随绘制进度变化
+                    const hue = 180 + progress * 60;
+                    const alpha = 0.7 + progress * 0.2;
+
+                    ctx.strokeStyle = `hsla(${hue}, 80%, 60%, ${alpha})`;
+                    ctx.lineWidth = 2 + progress * 1;
+                    ctx.lineCap = 'round';
+
+                    ctx.beginPath();
+                    ctx.moveTo(prevPoint.x, prevPoint.y);
+                    ctx.lineTo(point.x, point.y);
+                    ctx.stroke();
+                }
+            }
+
+            // 绘制动画中的当前点
+            const cycleCount = Math.max(a, b) * 2;
+            const animT = (animationTime * 2) % (Math.PI * 2 * cycleCount);
+            const currentX = A * Math.sin(a * animT + phase);
+            const currentY = B * Math.sin(b * animT);
+
+            const pulse = Math.sin(animationTime * 8) * 0.3 + 1;
+
+            ctx.fillStyle = '#ffffff';
+            ctx.shadowBlur = 30 * pulse;
+            ctx.shadowColor = '#ffffff';
+            ctx.beginPath();
+            ctx.arc(currentX, currentY, 8 * pulse, 0, Math.PI * 2);
+            ctx.fill();
+
+            // 外层光晕
+            ctx.globalAlpha = 0.6;
+            ctx.beginPath();
+            ctx.arc(currentX, currentY, 16 * pulse, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.restore();
+        }
+
+        // 绘制坐标网格
+        function drawGrid() {
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+            ctx.lineWidth = 1;
+
+            // 垂直线
+            ctx.beginPath();
+            ctx.moveTo(centerX, centerY - 200);
+            ctx.lineTo(centerX, centerY + 200);
+            ctx.stroke();
+
+            // 水平线
+            ctx.beginPath();
+            ctx.moveTo(centerX - 200, centerY);
+            ctx.lineTo(centerX + 200, centerY);
+            ctx.stroke();
+        }
+
+        function animate() {
+            drawBackground();
+            drawGrid();
+
+            animationTime += 0.016;
+
+            // 相位差从-180°扫描到+180°
+            phaseProgress += 0.003;
+
+            if (phaseProgress >= 1) {
+                // 当前频率比的相位扫描完成，切换到下一个频率比
+                phaseProgress = 0;
+                currentRatioIndex = (currentRatioIndex + 1) % ratioPresets.length;
+            }
+
+            // 设置当前频率比
+            a = ratioPresets[currentRatioIndex].a;
+            b = ratioPresets[currentRatioIndex].b;
+
+            // 相位差从-π到+π
+            phase = (phaseProgress * 2 - 1) * Math.PI;
+
+            // 生成当前参数下的完整曲线
+            completeTrail = generateCompleteCurve(a, b, phase);
+
+            // 更新显示值
+            ratioValueDisplay.textContent = `${a}:${b}`;
+            phaseValueDisplay.textContent = Math.round(phase * 180 / Math.PI) + '°';
+
+            // 绘制各个组件
+            drawXSineWave();
+            drawYSineWave();
+            drawLissajousCurve();
+
+            requestAnimationFrame(animate);
+        }
+
+        animate();
+    </script>
+
+    <div class="wisdom">
+        <div>合拍并非步步一致，而是频率相容、相位可调。</div>
+        <div>学会微调节奏，轨迹就会从混乱走向优雅。</div>
+
+    </div>
+
+</body>
+
+</html>

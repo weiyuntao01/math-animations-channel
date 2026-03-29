@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spirograph 齿轮纹身</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #000;
+            overflow: hidden;
+            position: relative;
+        }
+
+        #canvas {
+            display: block;
+        }
+
+        .formula-display {
+            position: absolute;
+            top: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: white;
+            font-size: 24px;
+            font-weight: 200;
+            letter-spacing: 2px;
+            text-shadow: 0 0 20px rgba(255, 255, 255, 0.5);
+            z-index: 100;
+            text-align: center;
+        }
+
+        .formula-display .math {
+            font-family: 'Times New Roman', serif;
+            font-style: italic;
+            font-weight: 300;
+            font-size: 20px;
+        }
+
+        .parameter-display {
+            position: absolute;
+            top: 120px;
+            left: 60px;
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 22px;
+            font-weight: 300;
+        }
+
+        .parameter-value {
+            color: #00e5ff;
+            font-weight: 400;
+            text-shadow: 0 0 10px rgba(0, 229, 255, 0.8);
+        }
+
+        .secondary-param {
+            position: absolute;
+            top: 160px;
+            left: 60px;
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 20px;
+            font-weight: 300;
+        }
+
+        .secondary-value {
+            color: #18ffff;
+            font-weight: 400;
+            text-shadow: 0 0 8px rgba(24, 255, 255, 0.6);
+        }
+
+        .tertiary-param {
+            position: absolute;
+            top: 195px;
+            left: 60px;
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 20px;
+            font-weight: 300;
+        }
+
+        .tertiary-value {
+            color: #84ffff;
+            font-weight: 400;
+            text-shadow: 0 0 8px rgba(132, 255, 255, 0.6);
+        }
+
+        .gear-info {
+            position: absolute;
+            top: 120px;
+            right: 60px;
+            color: rgba(255, 255, 255, 0.85);
+            font-size: 16px;
+            font-weight: 300;
+            text-align: right;
+            line-height: 2;
+            z-index: 100;
+        }
+
+        .gear-label {
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 14px;
+        }
+
+        .gear-value {
+            color: #ff6ec7;
+            font-weight: 400;
+            font-size: 18px;
+            text-shadow: 0 0 8px rgba(255, 110, 199, 0.6);
+        }
+
+        .wisdom {
+            position: absolute;
+            left: 60px;
+            right: 60px;
+            bottom: 60px;
+            max-width: 72ch;
+            color: rgba(255, 255, 255, 0.95);
+            font-size: 20px;
+            font-weight: 300;
+            line-height: 1.6;
+            letter-spacing: 0.2px;
+            text-shadow: 0 2px 10px rgba(0, 0, 0, 0.45);
+            user-select: none;
+            pointer-events: none;
+            z-index: 9999;
+        }
+
+        .wisdom div+div {
+            margin-top: 6px;
+            opacity: 0.95;
+        }
+
+        @media (max-width: 768px) {
+            .wisdom {
+                left: 16px;
+                right: 16px;
+                bottom: 24px;
+                font-size: 16px;
+            }
+
+            .gear-info {
+                top: 250px;
+                right: 16px;
+                font-size: 14px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <canvas id="canvas"></canvas>
+
+    <div class="formula-display">
+        <div class="math">x = (R-r)cos(t) + d·cos((R-r)/r·t)</div>
+        <div class="math">y = (R-r)sin(t) - d·sin((R-r)/r·t)</div>
+    </div>
+
+    <div class="parameter-display">
+        固定圆 R = <span class="parameter-value" id="R-value">150</span>
+    </div>
+    <div class="secondary-param">
+        滚动圆 r = <span class="secondary-value" id="r-value">50</span>
+    </div>
+    <div class="tertiary-param">
+        笔距 d = <span class="tertiary-value" id="d-value">30</span>
+    </div>
+
+    <div class="gear-info">
+        <div class="gear-label">齿轮比</div>
+        <div class="gear-value" id="ratio-value">3:1</div>
+        <div class="gear-label" style="margin-top: 8px;">花瓣数</div>
+        <div class="gear-value" id="petals-value">3</div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const RDisplay = document.getElementById('R-value');
+        const rDisplay = document.getElementById('r-value');
+        const dDisplay = document.getElementById('d-value');
+        const ratioDisplay = document.getElementById('ratio-value');
+        const petalsDisplay = document.getElementById('petals-value');
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        let animationTime = 0;
+        let R = 150; // 固定圆半径
+        let r = 50;  // 滚动圆半径
+        let d = 30;  // 笔距离滚动圆中心的距离
+        let t = 0;   // 参数t
+        let trail = []; // 轨迹点
+        let maxTrailLength = 2000;
+
+        // Spirograph参数预设 - 方案1：按花瓣数递增（视觉渐进）
+        const presets = [
+            { R: 150, r: 75, d: 55 },   // 2花瓣
+            { R: 150, r: 50, d: 35 },   // 3花瓣
+            { R: 120, r: 30, d: 40 },   // 4花瓣
+            { R: 150, r: 30, d: 50 },   // 5花瓣
+            { R: 150, r: 25, d: 45 },   // 6花瓣
+        ];
+        let currentPresetIndex = 0;
+        let presetTransitionProgress = 0;
+
+        function drawBackground() {
+            const gradient = ctx.createRadialGradient(
+                canvas.width / 2, canvas.height / 2, 0,
+                canvas.width / 2, canvas.height / 2, Math.max(canvas.width, canvas.height) * 0.7
+            );
+
+            const hue = (animationTime * 8) % 360;
+            gradient.addColorStop(0, `hsla(${hue + 200}, 60%, 8%, 1)`);
+            gradient.addColorStop(0.5, `hsla(${hue + 220}, 50%, 5%, 1)`);
+            gradient.addColorStop(1, 'rgba(5, 10, 20, 1)');
+
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+
+        // 绘制固定圆（外圈）
+        function drawFixedCircle() {
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+
+            ctx.save();
+            ctx.translate(centerX, centerY);
+
+            // 固定圆轮廓
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([8, 8]);
+            ctx.beginPath();
+            ctx.arc(0, 0, R, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            // 绘制齿轮齿
+            const teethCount = Math.floor(R / 5);
+            for (let i = 0; i < teethCount; i++) {
+                const angle = (i / teethCount) * Math.PI * 2;
+                const x1 = R * Math.cos(angle);
+                const y1 = R * Math.sin(angle);
+                const x2 = (R + 8) * Math.cos(angle);
+                const y2 = (R + 8) * Math.sin(angle);
+
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(x1, y1);
+                ctx.lineTo(x2, y2);
+                ctx.stroke();
+            }
+
+            ctx.restore();
+        }
+
+        // 绘制滚动圆
+        function drawRollingCircle() {
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+
+            // 计算滚动圆中心位置
+            const rollingCenterX = (R - r) * Math.cos(t);
+            const rollingCenterY = (R - r) * Math.sin(t);
+
+            ctx.save();
+            ctx.translate(centerX, centerY);
+
+            // 从固定圆中心到滚动圆中心的连线
+            ctx.strokeStyle = 'rgba(255, 110, 199, 0.3)';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([5, 5]);
+            ctx.beginPath();
+            ctx.moveTo(0, 0);
+            ctx.lineTo(rollingCenterX, rollingCenterY);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            // 滚动圆本身
+            ctx.strokeStyle = 'rgba(255, 110, 199, 0.5)';
+            ctx.lineWidth = 2;
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = 'rgba(255, 110, 199, 0.4)';
+            ctx.beginPath();
+            ctx.arc(rollingCenterX, rollingCenterY, r, 0, Math.PI * 2);
+            ctx.stroke();
+
+            // 滚动圆的齿轮齿
+            const teethCount = Math.floor(r / 3);
+            for (let i = 0; i < teethCount; i++) {
+                const angle = (i / teethCount) * Math.PI * 2 - t * (R - r) / r;
+                const x1 = rollingCenterX + r * Math.cos(angle);
+                const y1 = rollingCenterY + r * Math.sin(angle);
+                const x2 = rollingCenterX + (r - 6) * Math.cos(angle);
+                const y2 = rollingCenterY + (r - 6) * Math.sin(angle);
+
+                ctx.strokeStyle = 'rgba(255, 110, 199, 0.3)';
+                ctx.lineWidth = 1.5;
+                ctx.beginPath();
+                ctx.moveTo(x1, y1);
+                ctx.lineTo(x2, y2);
+                ctx.stroke();
+            }
+
+            // 笔的位置
+            const penAngle = -t * (R - r) / r;
+            const penX = rollingCenterX + d * Math.cos(penAngle);
+            const penY = rollingCenterY + d * Math.sin(penAngle);
+
+            // 从滚动圆中心到笔的连线
+            ctx.strokeStyle = 'rgba(0, 229, 255, 0.5)';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([3, 3]);
+            ctx.beginPath();
+            ctx.moveTo(rollingCenterX, rollingCenterY);
+            ctx.lineTo(penX, penY);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            // 笔尖（脉动效果）
+            const pulse = Math.sin(animationTime * 10) * 0.3 + 1;
+            ctx.fillStyle = '#00e5ff';
+            ctx.shadowBlur = 25 * pulse;
+            ctx.shadowColor = '#00e5ff';
+            ctx.beginPath();
+            ctx.arc(penX, penY, 6 * pulse, 0, Math.PI * 2);
+            ctx.fill();
+
+            // 外层光晕
+            ctx.globalAlpha = 0.5;
+            ctx.beginPath();
+            ctx.arc(penX, penY, 12 * pulse, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.restore();
+        }
+
+        // 绘制Spirograph轨迹
+        function drawSpirograph() {
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+
+            if (trail.length < 2) return;
+
+            ctx.save();
+            ctx.translate(centerX, centerY);
+
+            // 绘制完整的轨迹
+            for (let i = 1; i < trail.length; i++) {
+                const point = trail[i];
+                const prevPoint = trail[i - 1];
+                const progress = i / trail.length;
+
+                // 彩虹色渐变
+                const hue = (progress * 360 + animationTime * 30) % 360;
+                const saturation = 80 + progress * 15;
+                const lightness = 50 + Math.sin(progress * Math.PI * 4) * 10;
+                const alpha = 0.6 + progress * 0.3;
+
+                ctx.strokeStyle = `hsla(${hue}, ${saturation}%, ${lightness}%, ${alpha})`;
+                ctx.lineWidth = 2 + progress * 1.5;
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+
+                // 辉光效果
+                ctx.shadowBlur = 12 + progress * 8;
+                ctx.shadowColor = `hsla(${hue}, ${saturation}%, ${lightness}%, ${alpha * 0.6})`;
+
+                ctx.beginPath();
+                ctx.moveTo(prevPoint.x, prevPoint.y);
+                ctx.lineTo(point.x, point.y);
+                ctx.stroke();
+            }
+
+            // 额外的外层辉光
+            ctx.globalAlpha = 0.3;
+            for (let i = 1; i < trail.length; i++) {
+                const point = trail[i];
+                const prevPoint = trail[i - 1];
+                const progress = i / trail.length;
+
+                if (progress > 0.8) { // 只对最新的部分添加强辉光
+                    const hue = (progress * 360 + animationTime * 30) % 360;
+                    ctx.strokeStyle = `hsla(${hue}, 90%, 60%, ${progress})`;
+                    ctx.lineWidth = 6;
+                    ctx.beginPath();
+                    ctx.moveTo(prevPoint.x, prevPoint.y);
+                    ctx.lineTo(point.x, point.y);
+                    ctx.stroke();
+                }
+            }
+
+            ctx.restore();
+        }
+
+        // 计算Spirograph点
+        function calculateSpirographPoint(t, R, r, d) {
+            const x = (R - r) * Math.cos(t) + d * Math.cos((R - r) / r * t);
+            const y = (R - r) * Math.sin(t) - d * Math.sin((R - r) / r * t);
+            return { x, y };
+        }
+
+        // 计算最大公约数
+        function gcd(a, b) {
+            return b === 0 ? a : gcd(b, a % b);
+        }
+
+        // 计算花瓣数
+        function calculatePetals(R, r) {
+            const ratio = Math.round(R / gcd(Math.round(R), Math.round(r)));
+            return ratio;
+        }
+
+        // 绘制中心装饰
+        function drawCenterDecoration() {
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+
+            ctx.save();
+            ctx.translate(centerX, centerY);
+
+            // 中心发光点
+            const pulse = Math.sin(animationTime * 2) * 0.3 + 0.7;
+            const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, 20 * pulse);
+            gradient.addColorStop(0, 'rgba(255, 255, 255, 0.8)');
+            gradient.addColorStop(0.5, 'rgba(100, 200, 255, 0.4)');
+            gradient.addColorStop(1, 'rgba(100, 200, 255, 0)');
+
+            ctx.fillStyle = gradient;
+            ctx.beginPath();
+            ctx.arc(0, 0, 20 * pulse, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.restore();
+        }
+
+        function animate() {
+            try {
+                drawBackground();
+
+                animationTime += 0.016;
+
+                // 预设转换逻辑
+                presetTransitionProgress += 0.003; // 进一步加快预设切换速度
+                if (presetTransitionProgress >= 1) {
+                    presetTransitionProgress = 0;
+                    currentPresetIndex = (currentPresetIndex + 1) % presets.length;
+                    trail = []; // 清空轨迹，准备绘制新图案
+                    t = 0;
+                }
+
+                // 平滑过渡到新的预设值
+                const targetPreset = presets[currentPresetIndex];
+                const transitionSpeed = 0.08; // 进一步加快参数过渡速度
+                R += (targetPreset.R - R) * transitionSpeed;
+                r += (targetPreset.r - r) * transitionSpeed;
+                d += (targetPreset.d - d) * transitionSpeed;
+
+                // 更新参数
+                t += 0.06; // 进一步加快绘制速度
+
+                // 计算当前点
+                const point = calculateSpirographPoint(t, R, r, d);
+                trail.push(point);
+
+                // 限制轨迹长度
+                if (trail.length > maxTrailLength) {
+                    trail.shift();
+                }
+
+                // 计算齿轮比和花瓣数
+                const gearRatio = R / r;
+                const petals = calculatePetals(R, r);
+
+                // 更新显示值
+                RDisplay.textContent = Math.round(R);
+                rDisplay.textContent = Math.round(r);
+                dDisplay.textContent = Math.round(d);
+                ratioDisplay.textContent = `${Math.round(R / gcd(Math.round(R), Math.round(r)))}:${Math.round(r / gcd(Math.round(R), Math.round(r)))}`;
+                petalsDisplay.textContent = petals;
+
+                // 绘制所有组件
+                drawFixedCircle();
+                drawSpirograph();
+                drawRollingCircle();
+                drawCenterDecoration();
+
+                requestAnimationFrame(animate);
+            } catch (error) {
+                console.error('Animation error:', error);
+                requestAnimationFrame(animate);
+            }
+        }
+
+        animate();
+    </script>
+
+    <div class="wisdom">
+        <div>齿轮咬合，规律旋转，却能创造出无限变化的美丽轨迹。</div>
+        <div>人生也如齿轮，在约束中自由，在重复中创新——关键在于你与世界的咬合方式。</div>
+    </div>
+
+</body>
+
+</html>

@@ -1,0 +1,124 @@
+{
+  "preview": {
+    "ep": 15,
+    "stage": "preview",
+    "script": "information_theory_ep15.py",
+    "video": "media\\videos\\information_theory_ep15\\480p15\\InformationTheoryEP15.mp4",
+    "ok": true,
+    "errors": [],
+    "warnings": [
+      "self.wait > 4 found: [4.5, 5.5, 8.0, 8.0, 5.0]"
+    ],
+    "checks": {
+      "static": {
+        "ok": true,
+        "errors": [],
+        "warnings": [
+          "self.wait > 4 found: [4.5, 5.5, 8.0, 8.0, 5.0]"
+        ],
+        "details": {
+          "run_times_count": 22,
+          "waits_count": 6,
+          "long_runs": [],
+          "long_waits": [
+            4.5,
+            5.5,
+            8.0,
+            8.0,
+            5.0
+          ]
+        }
+      },
+      "rhythm_proxy": {
+        "ok": true,
+        "errors": [],
+        "warnings": [],
+        "details": {}
+      },
+      "duration": {
+        "ok": true,
+        "errors": [],
+        "warnings": [],
+        "details": {
+          "duration_sec": 60.07,
+          "fps": 15.0,
+          "frames": 901,
+          "resolution": "854x480"
+        }
+      },
+      "ocr_layout": {
+        "ok": true,
+        "errors": [],
+        "warnings": [],
+        "details": {
+          "sample_frames": 8,
+          "detected_boxes": 59,
+          "ocr_failed_frames": [],
+          "out_of_bounds_samples": [],
+          "overlap_samples": []
+        }
+      }
+    }
+  },
+  "final": {
+    "ep": 15,
+    "stage": "final",
+    "script": "information_theory_ep15.py",
+    "video": "media\\videos\\information_theory_ep15\\1080p60\\InformationTheoryEP15.mp4",
+    "ok": true,
+    "errors": [],
+    "warnings": [
+      "self.wait > 4 found: [4.5, 5.5, 8.0, 8.0, 5.0]"
+    ],
+    "checks": {
+      "static": {
+        "ok": true,
+        "errors": [],
+        "warnings": [
+          "self.wait > 4 found: [4.5, 5.5, 8.0, 8.0, 5.0]"
+        ],
+        "details": {
+          "run_times_count": 22,
+          "waits_count": 6,
+          "long_runs": [],
+          "long_waits": [
+            4.5,
+            5.5,
+            8.0,
+            8.0,
+            5.0
+          ]
+        }
+      },
+      "rhythm_proxy": {
+        "ok": true,
+        "errors": [],
+        "warnings": [],
+        "details": {}
+      },
+      "duration": {
+        "ok": true,
+        "errors": [],
+        "warnings": [],
+        "details": {
+          "duration_sec": 60.0,
+          "fps": 60.0,
+          "frames": 3600,
+          "resolution": "1920x1080"
+        }
+      },
+      "ocr_layout": {
+        "ok": true,
+        "errors": [],
+        "warnings": [],
+        "details": {
+          "sample_frames": 12,
+          "detected_boxes": 83,
+          "ocr_failed_frames": [],
+          "out_of_bounds_samples": [],
+          "overlap_samples": []
+        }
+      }
+    }
+  }
+}

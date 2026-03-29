@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>黄金螺线：斐波那契对数花序</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #000;
+            overflow: hidden;
+            position: relative;
+        }
+
+        #canvas {
+            display: block;
+        }
+
+        .title-area {
+            position: absolute;
+            top: 50px;
+            left: 50%;
+            transform: translateX(-50%);
+            text-align: center;
+            z-index: 100;
+        }
+
+        .main-title {
+            color: white;
+            font-size: 36px;
+            font-weight: 200;
+            letter-spacing: 3px;
+            text-shadow: 0 0 30px rgba(255, 215, 0, 0.6);
+            margin-bottom: 10px;
+        }
+
+        .formula {
+            color: rgba(255, 215, 0, 0.9);
+            font-size: 28px;
+            font-family: 'Times New Roman', serif;
+            font-style: italic;
+            text-shadow: 0 0 20px rgba(255, 215, 0, 0.4);
+        }
+
+        .stats-bar {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 100px;
+            background: linear-gradient(to top, rgba(0, 0, 0, 0.9), transparent);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 80px;
+            z-index: 100;
+        }
+
+        .stat-item {
+            text-align: center;
+        }
+
+        .stat-label {
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 14px;
+            margin-bottom: 8px;
+            letter-spacing: 1px;
+        }
+
+        .stat-value {
+            color: #ffd700;
+            font-size: 32px;
+            font-weight: 300;
+            text-shadow: 0 0 15px rgba(255, 215, 0, 0.8);
+            font-family: 'Courier New', monospace;
+        }
+
+        .wisdom {
+            position: absolute;
+            left: 50%;
+            bottom: 120px;
+            transform: translateX(-50%);
+            max-width: 800px;
+            color: rgba(255, 255, 255, 0.95);
+            font-size: 20px;
+            font-weight: 300;
+            line-height: 1.6;
+            letter-spacing: 0.5px;
+            text-shadow: 0 2px 10px rgba(0, 0, 0, 0.8);
+            text-align: center;
+            user-select: none;
+            pointer-events: none;
+            z-index: 9999;
+            padding: 0 40px;
+        }
+
+        @media (max-width: 768px) {
+            .main-title { font-size: 28px; }
+            .formula { font-size: 20px; }
+            .stats-bar { gap: 40px; height: 80px; }
+            .stat-value { font-size: 24px; }
+            .wisdom { font-size: 16px; bottom: 100px; }
+        }
+    </style>
+</head>
+
+<body>
+    <canvas id="canvas"></canvas>
+
+    <div class="title-area">
+        <div class="main-title">黄金螺线</div>
+        <div class="formula">θ = n × 137.5° · r = √n</div>
+    </div>
+
+    <div class="stats-bar">
+        <div class="stat-item">
+            <div class="stat-label">种子数</div>
+            <div class="stat-value" id="seed-count">0</div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-label">黄金角</div>
+            <div class="stat-value">137.5°</div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-label">黄金比 φ</div>
+            <div class="stat-value">1.618</div>
+        </div>
+    </div>
+
+    <div class="wisdom">
+        自然界中最优雅的排列：向日葵、松果、鹦鹉螺——137.5°黄金角，让每一颗种子都有最大的生存空间
+    </div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const seedCountDisplay = document.getElementById('seed-count');
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        let animationTime = 0;
+        let seedCount = 0;
+        const maxSeeds = 800;
+        const goldenAngle = 137.5077640500378;
+        let isPaused = false;
+        let pauseTimer = 0;
+        const pauseDuration = 5; // 5秒
+
+        function drawBackground() {
+            // 深邃的渐变背景
+            const gradient = ctx.createRadialGradient(
+                canvas.width / 2, canvas.height / 2, 0,
+                canvas.width / 2, canvas.height / 2, Math.max(canvas.width, canvas.height) * 0.8
+            );
+
+            gradient.addColorStop(0, 'rgba(15, 10, 0, 1)');
+            gradient.addColorStop(0.6, 'rgba(5, 5, 0, 1)');
+            gradient.addColorStop(1, 'rgba(0, 0, 0, 1)');
+
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+
+        // 绘制对数螺旋线（多条，形成花瓣效果）
+        function drawGoldenSpirals() {
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+            const currentSeeds = Math.floor(seedCount);
+
+            if (currentSeeds < 30) return;
+
+            ctx.save();
+            ctx.translate(centerX, centerY);
+
+            // 绘制多条螺旋臂（斐波那契螺旋数）
+            const spiralCount = 21; // 斐波那契数
+            
+            for (let s = 0; s < spiralCount; s++) {
+                ctx.strokeStyle = `rgba(255, 215, 0, ${0.15})`;
+                ctx.lineWidth = 1.5;
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = 'rgba(255, 215, 0, 0.2)';
+
+                ctx.beginPath();
+                let firstPoint = true;
+
+                for (let i = s; i < currentSeeds; i += spiralCount) {
+                    const angle = i * goldenAngle * Math.PI / 180;
+                    const radius = 4 * Math.sqrt(i);
+
+                    const x = radius * Math.cos(angle);
+                    const y = radius * Math.sin(angle);
+
+                    if (firstPoint) {
+                        ctx.moveTo(x, y);
+                        firstPoint = false;
+                    } else {
+                        ctx.lineTo(x, y);
+                    }
+                }
+
+                ctx.stroke();
+            }
+
+            ctx.restore();
+        }
+
+        // 绘制主黄金螺旋（强调）
+        function drawMainSpiral() {
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+            const currentSeeds = Math.floor(seedCount);
+
+            if (currentSeeds < 50) return;
+
+            ctx.save();
+            ctx.translate(centerX, centerY);
+
+            const goldenRatio = 1.618033988749;
+            const maxTurns = Math.min(currentSeeds / 80, 8);
+
+            ctx.strokeStyle = 'rgba(255, 215, 0, 0.6)';
+            ctx.lineWidth = 4;
+            ctx.shadowBlur = 25;
+            ctx.shadowColor = 'rgba(255, 215, 0, 0.5)';
+
+            ctx.beginPath();
+            for (let t = 0; t <= maxTurns * Math.PI * 2; t += 0.05) {
+                const r = 15 * Math.pow(goldenRatio, t / (Math.PI * 2));
+                const x = r * Math.cos(t);
+                const y = r * Math.sin(t);
+
+                if (t === 0) {
+                    ctx.moveTo(x, y);
+                } else {
+                    ctx.lineTo(x, y);
+                }
+            }
+
+            ctx.stroke();
+
+            // 外层辉光
+            ctx.globalAlpha = 0.4;
+            ctx.lineWidth = 8;
+            ctx.stroke();
+
+            ctx.restore();
+        }
+
+        // 绘制种子点（向日葵花序）
+        function drawSeeds() {
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+            const scale = 4;
+            const currentSeeds = Math.floor(seedCount);
+
+            ctx.save();
+            ctx.translate(centerX, centerY);
+
+            for (let i = 0; i < currentSeeds; i++) {
+                const angle = i * goldenAngle * Math.PI / 180;
+                const radius = scale * Math.sqrt(i);
+
+                const x = radius * Math.cos(angle);
+                const y = radius * Math.sin(angle);
+
+                // 种子大小
+                const seedSize = 2 + Math.sqrt(i) * 0.18;
+
+                // 从中心到边缘的颜色渐变
+                const t = Math.min(i / currentSeeds, 1);
+                const hue = 40 + t * 20;
+                const saturation = 90 - t * 20;
+                const lightness = 35 + t * 35;
+                const alpha = 0.8 + t * 0.2;
+
+                // 添加呼吸效果
+                const pulse = Math.sin(animationTime * 3 + i * 0.05) * 0.15 + 0.85;
+
+                ctx.fillStyle = `hsla(${hue}, ${saturation}%, ${lightness}%, ${alpha})`;
+                ctx.shadowBlur = 6;
+                ctx.shadowColor = `hsla(${hue}, ${saturation}%, ${lightness}%, 0.6)`;
+
+                ctx.beginPath();
+                ctx.arc(x, y, seedSize * pulse, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            ctx.restore();
+        }
+
+        // 绘制新生成的种子（高亮动画）
+        function drawNewSeeds() {
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+            const scale = 4;
+            const currentSeeds = Math.floor(seedCount);
+
+            if (currentSeeds < 5) return;
+
+            ctx.save();
+            ctx.translate(centerX, centerY);
+
+            // 只高亮最新的几个种子
+            const highlightCount = 8;
+            for (let i = Math.max(0, currentSeeds - highlightCount); i < currentSeeds; i++) {
+                const angle = i * goldenAngle * Math.PI / 180;
+                const radius = scale * Math.sqrt(i);
+
+                const x = radius * Math.cos(angle);
+                const y = radius * Math.sin(angle);
+
+                const age = currentSeeds - i;
+                const alpha = (1 - age / highlightCount) * 0.8;
+                const size = 8 - age * 0.5;
+
+                ctx.fillStyle = `rgba(255, 255, 200, ${alpha})`;
+                ctx.shadowBlur = 30;
+                ctx.shadowColor = `rgba(255, 255, 200, ${alpha})`;
+
+                ctx.beginPath();
+                ctx.arc(x, y, size, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            ctx.restore();
+        }
+
+        // 绘制中心光源
+        function drawCenterGlow() {
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+            const pulse = Math.sin(animationTime * 3) * 0.3 + 1;
+
+            ctx.save();
+            ctx.translate(centerX, centerY);
+
+            // 多层辉光
+            for (let i = 3; i > 0; i--) {
+                const size = 20 * i * pulse;
+                const alpha = 0.3 / i;
+
+                const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, size);
+                gradient.addColorStop(0, `rgba(255, 235, 150, ${alpha})`);
+                gradient.addColorStop(0.5, `rgba(255, 215, 0, ${alpha * 0.5})`);
+                gradient.addColorStop(1, 'rgba(255, 215, 0, 0)');
+
+                ctx.fillStyle = gradient;
+                ctx.beginPath();
+                ctx.arc(0, 0, size, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            ctx.restore();
+        }
+
+        // 绘制粒子效果
+        function drawParticles() {
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+            const currentSeeds = Math.floor(seedCount);
+
+            if (currentSeeds < 100) return;
+
+            ctx.save();
+            ctx.translate(centerX, centerY);
+
+            const particleCount = 50;
+            for (let i = 0; i < particleCount; i++) {
+                const phase = (animationTime * 0.3 + i * 0.1) % 1;
+                const angle = i * goldenAngle * Math.PI / 180 + animationTime * 0.5;
+                const radius = phase * Math.min(canvas.width, canvas.height) * 0.4;
+
+                const x = radius * Math.cos(angle);
+                const y = radius * Math.sin(angle);
+
+                const sparkle = Math.sin(animationTime * 8 + i) * 0.5 + 0.5;
+                if (sparkle > 0.7) {
+                    const size = 2 + sparkle * 2;
+                    const alpha = (1 - phase) * sparkle * 0.6;
+
+                    ctx.fillStyle = `rgba(255, 235, 150, ${alpha})`;
+                    ctx.shadowBlur = 15;
+                    ctx.shadowColor = `rgba(255, 235, 150, ${alpha})`;
+
+                    ctx.beginPath();
+                    ctx.arc(x, y, size, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+
+            ctx.restore();
+        }
+
+        function animate() {
+            try {
+                drawBackground();
+
+                animationTime += 0.016;
+
+                // 种子数增长逻辑：增长到800，停留5秒，然后重置
+                if (!isPaused) {
+                    seedCount += 5;
+                    if (seedCount >= maxSeeds) {
+                        seedCount = maxSeeds;
+                        isPaused = true;
+                        pauseTimer = 0;
+                    }
+                } else {
+                    pauseTimer += 0.016;
+                    if (pauseTimer >= pauseDuration) {
+                        isPaused = false;
+                        seedCount = 0;
+                    }
+                }
+
+                // 更新显示
+                seedCountDisplay.textContent = Math.floor(seedCount);
+
+                // 分层绘制
+                drawGoldenSpirals();
+                drawMainSpiral();
+                drawSeeds();
+                drawNewSeeds();
+                drawParticles();
+                drawCenterGlow();
+
+                requestAnimationFrame(animate);
+            } catch (error) {
+                console.error('Animation error:', error);
+                requestAnimationFrame(animate);
+            }
+        }
+
+        animate();
+    </script>
+
+</body>
+
+</html>

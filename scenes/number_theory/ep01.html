@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EP01 - 素数瀑布：质数间隙灯光</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #0a0a1f 0%, #1a0a2e 50%, #2a0a3e 100%);
+            overflow: hidden;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        .info-container {
+            position: fixed;
+            top: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            text-align: center;
+            z-index: 10;
+            color: white;
+            text-shadow: 0 0 20px rgba(255, 255, 255, 0.5);
+        }
+
+        .title {
+            font-size: 2.5em;
+            font-weight: bold;
+            margin-bottom: 10px;
+            background: linear-gradient(45deg, #00ffff, #ff00ff, #ffff00);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: gradient-shift 3s ease infinite;
+        }
+
+        .subtitle {
+            font-size: 1.2em;
+            color: #88ccff;
+            margin-bottom: 20px;
+        }
+
+        .stats {
+            display: flex;
+            gap: 30px;
+            justify-content: center;
+            font-size: 1em;
+            color: #ccccff;
+        }
+
+        .stat-item {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 10px 20px;
+            border-radius: 10px;
+            backdrop-filter: blur(10px);
+        }
+
+        .stat-value {
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #00ffff;
+        }
+
+        .quote {
+            position: absolute;
+            left: 50%;
+            bottom: 70px;
+            transform: translateX(-50%);
+            max-width: 85vw;
+            white-space: nowrap;
+            overflow: hidden;
+            color: rgba(255, 255, 255, 0.98);
+            font-size: 38px;
+            font-weight: 500;
+            line-height: 1.6;
+            letter-spacing: 0.5px;
+            -webkit-text-stroke: 0.5px rgba(138, 43, 226, 0.3);
+            text-shadow:
+                0 0 2px rgba(138, 43, 226, 0.6),
+                0 0 12px rgba(138, 43, 226, 0.4),
+                0 2px 10px rgba(0, 0, 0, 0.8);
+            text-align: center;
+            user-select: none;
+            pointer-events: none;
+            z-index: 9999;
+            padding: 0 40px;
+            transition: opacity 1.5s ease;
+        }
+
+        @keyframes gradient-shift {
+
+            0%,
+            100% {
+                filter: hue-rotate(0deg);
+            }
+
+            50% {
+                filter: hue-rotate(30deg);
+            }
+        }
+
+        @keyframes float {
+
+            0%,
+            100% {
+                transform: translateX(-50%) translateY(0px);
+            }
+
+            50% {
+                transform: translateX(-50%) translateY(-10px);
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <canvas id="canvas"></canvas>
+
+    <div class="info-container">
+        <div class="title">素数瀑布：质数间隙灯光</div>
+        <div class="subtitle" id="primeRange">当前素数: 2</div>
+        <div class="subtitle" style="font-size: 0.9em; color: #aaddff; margin-top: -10px;" id="explanation">
+            柱子高度 = 两个素数之间的距离
+        </div>
+        <div class="stats">
+            <div class="stat-item">
+                <div>当前间隙</div>
+                <div class="stat-value" id="currentGap">-</div>
+            </div>
+            <div class="stat-item">
+                <div>最大间隙</div>
+                <div class="stat-value" id="maxGap">0</div>
+            </div>
+            <div class="stat-item">
+                <div>平均间隙</div>
+                <div class="stat-value" id="avgGap">0</div>
+            </div>
+            <div class="stat-item">
+                <div>素数计数</div>
+                <div class="stat-value" id="primeCount">1</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="quote"></div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+
+        // 设置画布大小
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        // 素数相关变量
+        let primes = [2];
+        let gaps = [];
+        let currentNumber = 3;
+        let maxGap = 0;
+        let gapSum = 0;
+
+        // 柱状图配置
+        const numBars = 30; // 显示30个柱子
+        const barWidth = canvas.width / (numBars + 1);
+        const maxBarHeight = canvas.height * 0.5;
+        const barY = canvas.height * 0.72;
+
+        // 粒子系统
+        const particles = [];
+
+        // 判断是否为素数
+        function isPrime(n) {
+            if (n < 2) return false;
+            if (n === 2) return true;
+            if (n % 2 === 0) return false;
+            const sqrt = Math.sqrt(n);
+            for (let i = 3; i <= sqrt; i += 2) {
+                if (n % i === 0) return false;
+            }
+            return true;
+        }
+
+        // 查找下一个素数并计算间隙
+        function findNextPrime() {
+            while (true) {
+                if (isPrime(currentNumber)) {
+                    const lastPrime = primes[primes.length - 1];
+                    const gap = currentNumber - lastPrime;
+
+                    primes.push(currentNumber);
+                    gaps.push(gap);
+
+                    // 更新统计
+                    if (gap > maxGap) maxGap = gap;
+                    gapSum += gap;
+
+                    // 只保留最近的numBars个间隙
+                    if (gaps.length > numBars) {
+                        const removedGap = gaps.shift();
+                        gapSum -= removedGap; // 修复：从总和中减去被移除的间隙
+                    }
+
+                    // 更新UI
+                    updateStats();
+
+                    currentNumber += 2;
+                    return;
+                }
+                currentNumber += 2;
+            }
+        }
+
+        // 更新统计信息
+        function updateStats() {
+            const currentPrime = primes[primes.length - 1];
+            const lastPrime = primes.length > 1 ? primes[primes.length - 2] : '';
+
+            if (lastPrime) {
+                document.getElementById('primeRange').textContent = `${lastPrime} → ${currentPrime}`;
+            } else {
+                document.getElementById('primeRange').textContent = `当前素数: ${currentPrime}`;
+            }
+
+            document.getElementById('currentGap').textContent = gaps[gaps.length - 1] || '-';
+            document.getElementById('maxGap').textContent = maxGap;
+            document.getElementById('avgGap').textContent = (gapSum / gaps.length).toFixed(2);
+            document.getElementById('primeCount').textContent = primes.length;
+        }
+
+        // 根据间隙获取颜色
+        function getColorForGap(gap, maxGapValue) {
+            const ratio = gap / Math.max(maxGapValue, 10);
+            const hue = 240 - ratio * 200; // 从蓝色(240)到红色(40)
+            const saturation = 80 + ratio * 20;
+            const lightness = 50 + ratio * 20;
+            return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+        }
+
+        // 粒子类
+        class Particle {
+            constructor(x, y, color) {
+                this.x = x;
+                this.y = y;
+                this.vx = (Math.random() - 0.5) * 3;
+                this.vy = (Math.random() - 0.5) * 3 - 2;
+                this.life = 1;
+                this.decay = 0.01 + Math.random() * 0.02;
+                this.size = 2 + Math.random() * 3;
+                this.color = color;
+            }
+
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                this.vy += 0.1; // 重力
+                this.life -= this.decay;
+            }
+
+            draw() {
+                ctx.save();
+                ctx.globalAlpha = this.life;
+                ctx.fillStyle = this.color;
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+
+        // 生成粒子
+        function generateParticles(x, y, count, color) {
+            for (let i = 0; i < count; i++) {
+                particles.push(new Particle(x, y, color));
+            }
+        }
+
+        // 绘制柱状图
+        function drawBars() {
+            if (gaps.length === 0) return;
+
+            const displayGaps = gaps.slice(-numBars);
+            const currentMaxGap = Math.max(...displayGaps, 10);
+
+            displayGaps.forEach((gap, index) => {
+                const x = barWidth * (index + 0.5);
+                const heightRatio = gap / currentMaxGap;
+                const height = heightRatio * maxBarHeight;
+                const y = barY - height;
+
+                const color = getColorForGap(gap, currentMaxGap);
+
+                // 绘制光柱
+                const gradient = ctx.createLinearGradient(x - barWidth * 0.4, y, x - barWidth * 0.4, barY);
+                gradient.addColorStop(0, color);
+                gradient.addColorStop(1, 'rgba(0, 0, 0, 0.3)');
+
+                ctx.fillStyle = gradient;
+                ctx.shadowBlur = 20;
+                ctx.shadowColor = color;
+
+                ctx.beginPath();
+                ctx.roundRect(x - barWidth * 0.4, y, barWidth * 0.8, height, [10, 10, 0, 0]);
+                ctx.fill();
+
+                // 顶部发光效果
+                ctx.fillStyle = color;
+                ctx.shadowBlur = 30;
+                ctx.beginPath();
+                ctx.arc(x, y, barWidth * 0.2, 0, Math.PI * 2);
+                ctx.fill();
+
+                // 大间隙生成粒子
+                if (index === displayGaps.length - 1 && gap > currentMaxGap * 0.6) {
+                    if (Math.random() > 0.7) {
+                        generateParticles(x, y, 2, color);
+                    }
+                }
+
+                // 绘制间隙数值
+                ctx.save();
+                ctx.shadowBlur = 0;
+                ctx.fillStyle = 'white';
+                ctx.font = 'bold 14px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(gap, x, barY + 25);
+
+                // 如果是最后一根柱子，显示素数对
+                if (index === displayGaps.length - 1 && primes.length > 1) {
+                    ctx.font = '11px Arial';
+                    ctx.fillStyle = '#aaddff';
+                    const primeIndex = primes.length - numBars + index;
+                    if (primeIndex >= 0 && primeIndex < primes.length - 1) {
+                        ctx.fillText(`${primes[primeIndex]}→${primes[primeIndex + 1]}`, x, barY + 40);
+                    }
+                }
+                ctx.restore();
+            });
+        }
+
+        // 绘制连接线
+        function drawConnectingLines() {
+            if (gaps.length < 2) return;
+
+            const displayGaps = gaps.slice(-numBars);
+            const currentMaxGap = Math.max(...displayGaps, 10);
+
+            ctx.save();
+            ctx.strokeStyle = 'rgba(100, 200, 255, 0.5)';
+            ctx.lineWidth = 2;
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = 'rgba(100, 200, 255, 0.8)';
+
+            ctx.beginPath();
+            displayGaps.forEach((gap, index) => {
+                const x = barWidth * (index + 0.5);
+                const heightRatio = gap / currentMaxGap;
+                const height = heightRatio * maxBarHeight;
+                const y = barY - height;
+
+                if (index === 0) {
+                    ctx.moveTo(x, y);
+                } else {
+                    ctx.lineTo(x, y);
+                }
+            });
+            ctx.stroke();
+            ctx.restore();
+        }
+
+        // 更新和绘制粒子
+        function updateParticles() {
+            for (let i = particles.length - 1; i >= 0; i--) {
+                particles[i].update();
+                particles[i].draw();
+
+                if (particles[i].life <= 0) {
+                    particles.splice(i, 1);
+                }
+            }
+        }
+
+        // 主动画循环
+        let lastTime = 0;
+        const primeInterval = 300; // 每300ms计算一个新素数
+
+        function animate(currentTime) {
+            // 清空画布
+            ctx.fillStyle = 'rgba(10, 10, 31, 0.3)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // 更新素数（控制速度）
+            if (currentTime - lastTime > primeInterval) {
+                findNextPrime();
+                lastTime = currentTime;
+            }
+
+            // 绘制元素
+            drawBars();
+            drawConnectingLines();
+            updateParticles();
+
+            requestAnimationFrame(animate);
+        }
+
+        // 启动动画
+        animate(0);
+
+        // 点击效果
+        canvas.addEventListener('click', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+
+            // 检查是否点击了某个柱子
+            const displayGaps = gaps.slice(-numBars);
+            displayGaps.forEach((gap, index) => {
+                const barX = barWidth * (index + 0.5);
+                const currentMaxGap = Math.max(...displayGaps, 10);
+                const heightRatio = gap / currentMaxGap;
+                const height = heightRatio * maxBarHeight;
+                const barTop = barY - height;
+
+                if (Math.abs(x - barX) < barWidth * 0.4 && y > barTop && y < barY) {
+                    const color = getColorForGap(gap, currentMaxGap);
+                    generateParticles(barX, barTop, 20, color);
+
+                    // 显示信息
+                    const primeIndex = primes.length - numBars + index;
+                    if (primeIndex >= 0 && primeIndex < primes.length - 1) {
+                        alert(`素数对: ${primes[primeIndex]} → ${primes[primeIndex + 1]}\n间隙: ${gap}`);
+                    }
+                }
+            });
+        });
+
+        // 字幕系统
+        const subtitles = [
+            "什么是素数？只能被1和自己整除的数",
+            "例如：2, 3, 5, 7, 11, 13, 17, 19, 23, 29...",
+            "4不是素数，因为4=2×2，能被2整除",
+            "素数间隙：两个相邻素数之间的距离",
+            "第一个间隙：2到3，相差1",
+            "第二个间隙：3到5，相差2",
+            "第四个间隙：7到11，相差4，跳得更远了",
+            "屏幕下方的每根光柱代表一个素数间隙",
+            "光柱越高，说明两个素数离得越远",
+            "光柱越矮，说明两个素数离得越近",
+            "颜色变化：蓝色是小间隙，红色是大间隙",
+            "程序不停地寻找新素数：2→3→5→7→11...",
+            "每找到一个新素数，右侧就会出现新光柱",
+            "光柱像瀑布一样从右向左流动",
+            "素数分布看似随机，有时近有时远",
+            "但平均间隙会随着数字增大而变大",
+            "这就是数学中的混沌与秩序之美"
+        ];
+
+        const quoteDiv = document.querySelector('.quote');
+        let subtitleIndex = 0;
+
+        function fitSubtitleToOneLine() {
+            const padding = 80;
+            const maxWidth = window.innerWidth - padding;
+            const base = window.innerWidth < 768 ? 32 : 38;  // 扩大2倍
+            const min = window.innerWidth < 768 ? 26 : 30;   // 扩大2倍
+            let size = base;
+            quoteDiv.style.fontSize = size + 'px';
+            while (quoteDiv.scrollWidth > maxWidth && size > min) {
+                size -= 1;
+                quoteDiv.style.fontSize = size + 'px';
+            }
+        }
+
+        function setSubtitleText(text) {
+            quoteDiv.style.fontSize = '';
+            quoteDiv.textContent = text;
+            fitSubtitleToOneLine();
+        }
+
+        function fadeIn() {
+            requestAnimationFrame(() => { quoteDiv.style.opacity = 1; });
+        }
+
+        function fadeOut(callback) {
+            quoteDiv.style.opacity = 0;
+            setTimeout(callback, 1000);
+        }
+
+        // 初始显示
+        quoteDiv.style.opacity = 0;
+        setTimeout(() => {
+            setSubtitleText(subtitles[subtitleIndex]);
+            fadeIn();
+        }, 1200);
+
+        // 字幕轮换
+        function rotateSubtitle() {
+            fadeOut(() => {
+                subtitleIndex = (subtitleIndex + 1) % subtitles.length;
+                setSubtitleText(subtitles[subtitleIndex]);
+                fadeIn();
+            });
+        }
+
+        setInterval(rotateSubtitle, 5000);
+        window.addEventListener('resize', () => { fitSubtitleToOneLine(); });
+    </script>
+</body>
+
+</html>

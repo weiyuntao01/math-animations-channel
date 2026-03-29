@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>心形线：Cardioid</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #000;
+            overflow: hidden;
+            position: relative;
+        }
+
+        #canvas {
+            display: block;
+        }
+
+        .formula-display {
+            position: absolute;
+            top: 40px;
+            left: 60px;
+            color: white;
+            font-size: 32px;
+            font-weight: 200;
+            letter-spacing: 2px;
+            text-shadow: 0 0 20px rgba(255, 255, 255, 0.5);
+        }
+
+        .formula-display .math {
+            font-family: 'Times New Roman', serif;
+            font-style: italic;
+            font-weight: 300;
+        }
+
+        .parameter-display {
+            position: absolute;
+            top: 100px;
+            left: 60px;
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 24px;
+            font-weight: 300;
+        }
+
+        .parameter-value {
+            color: #ff1744;
+            font-weight: 400;
+            text-shadow: 0 0 10px rgba(255, 23, 68, 0.8);
+        }
+
+        .secondary-param {
+            position: absolute;
+            top: 140px;
+            left: 60px;
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 24px;
+            font-weight: 300;
+        }
+
+        .secondary-value {
+            color: #e91e63;
+            font-weight: 400;
+            text-shadow: 0 0 8px rgba(233, 30, 99, 0.6);
+        }
+
+        .wisdom {
+            position: absolute;
+            left: 60px;
+            right: 60px;
+            bottom: 60px;
+            max-width: 72ch;
+            color: rgba(255, 255, 255, 0.95);
+            font-size: 20px;
+            font-weight: 300;
+            line-height: 1.6;
+            letter-spacing: 0.2px;
+            text-shadow: 0 2px 10px rgba(0, 0, 0, 0.45);
+            user-select: none;
+            pointer-events: none;
+            z-index: 9999;
+        }
+
+        .wisdom div+div {
+            margin-top: 6px;
+            opacity: 0.95;
+        }
+
+        @media (max-width: 768px) {
+            .wisdom {
+                left: 16px;
+                right: 16px;
+                bottom: 24px;
+                font-size: 16px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <canvas id="canvas"></canvas>
+
+    <div class="formula-display">
+        <span class="math">r = a(1 + cos θ)</span>
+    </div>
+    <div class="parameter-display">
+        a = <span class="parameter-value" id="a-value">120</span>
+    </div>
+    <div class="secondary-param">
+        θ = <span class="secondary-value" id="theta-value">0°</span>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const aValueDisplay = document.getElementById('a-value');
+        const thetaValueDisplay = document.getElementById('theta-value');
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        let animationTime = 0;
+        let a = 120;
+        let drawProgress = 0; // 绘制进度 0-1
+
+        function drawBackground() {
+            const gradient = ctx.createRadialGradient(
+                canvas.width / 2, canvas.height / 2, 0,
+                canvas.width / 2, canvas.height / 2, Math.max(canvas.width, canvas.height)
+            );
+
+            const hue = (animationTime * 15) % 360;
+            gradient.addColorStop(0, `hsla(${hue + 300}, 50%, 10%, 1)`);
+            gradient.addColorStop(0.5, `hsla(${hue + 320}, 40%, 5%, 1)`);
+            gradient.addColorStop(1, 'rgba(0, 0, 0, 1)');
+
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+
+        // 绘制极坐标网格
+        function drawPolarGrid() {
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+            const maxRadius = Math.min(canvas.width, canvas.height) * 0.4;
+
+            ctx.save();
+            ctx.translate(centerX, centerY);
+
+            // 绘制同心圆
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+            ctx.lineWidth = 1;
+            for (let i = 1; i <= 4; i++) {
+                ctx.beginPath();
+                ctx.arc(0, 0, maxRadius * i / 4, 0, Math.PI * 2);
+                ctx.stroke();
+            }
+
+            // 绘制径向线
+            for (let i = 0; i < 12; i++) {
+                const angle = (i / 12) * Math.PI * 2;
+                ctx.beginPath();
+                ctx.moveTo(0, 0);
+                ctx.lineTo(Math.cos(angle) * maxRadius, Math.sin(angle) * maxRadius);
+                ctx.stroke();
+            }
+
+            ctx.restore();
+        }
+
+        // 绘制多层心形（展示不同a值的效果）
+        function drawMultipleCardioids() {
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+
+            ctx.save();
+            ctx.translate(centerX, centerY);
+
+            // 绘制3层心形，展示层次感
+            for (let layer = 0; layer < 3; layer++) {
+                const layerA = a * (1 - layer * 0.15);
+                const alpha = 0.3 - layer * 0.1;
+                const hue = 340 - layer * 20;
+
+                ctx.strokeStyle = `hsla(${hue}, 80%, 60%, ${alpha})`;
+                ctx.lineWidth = 2;
+                ctx.shadowBlur = 15;
+                ctx.shadowColor = `hsla(${hue}, 80%, 60%, ${alpha * 0.5})`;
+
+                ctx.beginPath();
+                for (let i = 0; i <= 200; i++) {
+                    const theta = (i / 200) * Math.PI * 2;
+                    const r = layerA * (1 + Math.cos(theta));
+                    const x = r * Math.cos(theta);
+                    const y = r * Math.sin(theta);
+
+                    if (i === 0) {
+                        ctx.moveTo(x, y);
+                    } else {
+                        ctx.lineTo(x, y);
+                    }
+                }
+                ctx.stroke();
+            }
+
+            ctx.restore();
+        }
+
+        // 绘制渐进式生成的主心形
+        function drawProgressiveCardioid() {
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+
+            ctx.save();
+            ctx.translate(centerX, centerY);
+
+            // 绘制已完成的部分
+            const steps = Math.floor(200 * drawProgress);
+
+            for (let i = 0; i < steps; i++) {
+                const theta = (i / 200) * Math.PI * 2;
+                const nextTheta = ((i + 1) / 200) * Math.PI * 2;
+
+                const r = a * (1 + Math.cos(theta));
+                const nextR = a * (1 + Math.cos(nextTheta));
+
+                const x = r * Math.cos(theta);
+                const y = r * Math.sin(theta);
+                const nextX = nextR * Math.cos(nextTheta);
+                const nextY = nextR * Math.sin(nextTheta);
+
+                // 用颜色表示θ的变化
+                const colorProgress = i / 200;
+                const hue = 300 + colorProgress * 120; // 从紫红到橙红渐变
+
+                ctx.strokeStyle = `hsla(${hue}, 85%, 65%, 0.9)`;
+                ctx.lineWidth = 3;
+                ctx.lineCap = 'round';
+                ctx.shadowBlur = 20;
+                ctx.shadowColor = `hsla(${hue}, 85%, 65%, 0.5)`;
+
+                ctx.beginPath();
+                ctx.moveTo(x, y);
+                ctx.lineTo(nextX, nextY);
+                ctx.stroke();
+            }
+
+            // 绘制当前点
+            if (steps > 0) {
+                const currentTheta = (steps / 200) * Math.PI * 2;
+                const currentR = a * (1 + Math.cos(currentTheta));
+                const currentX = currentR * Math.cos(currentTheta);
+                const currentY = currentR * Math.sin(currentTheta);
+
+                // 绘制从原点到当前点的连线
+                ctx.strokeStyle = 'rgba(0, 188, 212, 0.4)';
+                ctx.lineWidth = 1;
+                ctx.setLineDash([5, 5]);
+                ctx.beginPath();
+                ctx.moveTo(0, 0);
+                ctx.lineTo(currentX, currentY);
+                ctx.stroke();
+                ctx.setLineDash([]);
+
+                // 绘制当前θ角度的弧线指示
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.arc(0, 0, 30, 0, currentTheta);
+                ctx.stroke();
+
+                // 绘制当前点
+                const pulse = Math.sin(animationTime * 8) * 0.3 + 1;
+                ctx.fillStyle = '#00bcd4';
+                ctx.shadowBlur = 30;
+                ctx.shadowColor = '#00bcd4';
+                ctx.beginPath();
+                ctx.arc(currentX, currentY, 8 * pulse, 0, Math.PI * 2);
+                ctx.fill();
+
+                // 外层光晕
+                ctx.globalAlpha = 0.5;
+                ctx.beginPath();
+                ctx.arc(currentX, currentY, 15 * pulse, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.globalAlpha = 1;
+            }
+
+            ctx.restore();
+        }
+
+        function animate() {
+            drawBackground();
+            drawPolarGrid();
+
+            animationTime += 0.016;
+
+            // a值在80-160之间平滑变化
+            a = 80 + Math.sin(animationTime * 0.3) * 80;
+
+            // 绘制进度循环：从0绘制到1，然后重新开始
+            drawProgress += 0.005;
+            if (drawProgress > 1) {
+                drawProgress = 0;
+            }
+
+            // 计算当前θ值
+            const currentTheta = drawProgress * Math.PI * 2;
+
+            aValueDisplay.textContent = Math.round(a);
+            thetaValueDisplay.textContent = Math.round(currentTheta * 180 / Math.PI) + '°';
+
+            // 绘制多层心形作为背景
+            drawMultipleCardioids();
+
+            // 绘制渐进式的主心形
+            drawProgressiveCardioid();
+
+            requestAnimationFrame(animate);
+        }
+
+        animate();
+    </script>
+
+    <div class="wisdom">
+        <div>爱不是寻找完美，而是让彼此外向的一步步靠近。</div>
+        <div>同频时半径扩张，背离时回到原点——关系由角度决定。</div>
+
+    </div>
+
+</body>
+
+</html>

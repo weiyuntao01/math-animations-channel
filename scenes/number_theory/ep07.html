@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EP07 - Collatz 轨迹图</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #0f0a1a 0%, #1a0f2a 50%, #0a1a2a 100%);
+            overflow: hidden;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        .info-container {
+            position: fixed;
+            top: 25px;
+            left: 50%;
+            transform: translateX(-50%);
+            text-align: center;
+            z-index: 10;
+            color: white;
+            text-shadow: 0 0 20px rgba(255, 255, 255, 0.5);
+        }
+
+        .title {
+            font-size: 2.2em;
+            font-weight: bold;
+            margin-bottom: 8px;
+            background: linear-gradient(45deg, #00ffff, #00ff88, #88ff00);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: gradient-shift 3s ease infinite;
+        }
+
+        .subtitle {
+            font-size: 1em;
+            color: #88ffcc;
+            margin-bottom: 5px;
+        }
+
+        .stats {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            font-size: 0.9em;
+            color: #ccccff;
+            margin-top: 10px;
+        }
+
+        .stat-item {
+            background: rgba(0, 255, 255, 0.08);
+            padding: 8px 15px;
+            border-radius: 8px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(0, 255, 255, 0.25);
+        }
+
+        .stat-value {
+            font-size: 1.3em;
+            font-weight: bold;
+            color: #00ffff;
+            margin-top: 2px;
+        }
+
+        .center-highlight {
+            position: fixed;
+            top: 68%;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: clamp(22px, 3.6vw, 44px);
+            font-weight: 700;
+            color: #7fc8f2;
+            text-align: center;
+            letter-spacing: 1px;
+            line-height: 1.4;
+            white-space: nowrap;
+            z-index: 12;
+            text-shadow:
+                0 0 12px rgba(80, 170, 255, 0.35),
+                0 0 24px rgba(60, 140, 255, 0.22),
+                0 0 48px rgba(30, 120, 255, 0.15);
+            padding: 0 30px;
+        }
+
+        .quote {
+            position: absolute;
+            left: 50%;
+            bottom: 70px;
+            transform: translateX(-50%);
+            max-width: 85vw;
+            white-space: nowrap;
+            overflow: hidden;
+            color: rgba(255, 255, 255, 0.98);
+            font-size: 38px;
+            font-weight: 500;
+            line-height: 1.6;
+            letter-spacing: 0.5px;
+            -webkit-text-stroke: 0.5px rgba(0, 255, 200, 0.3);
+            text-shadow:
+                0 0 2px rgba(0, 255, 200, 0.6),
+                0 0 12px rgba(0, 255, 200, 0.4),
+                0 2px 10px rgba(0, 0, 0, 0.8);
+            text-align: center;
+            user-select: none;
+            pointer-events: none;
+            z-index: 9999;
+            padding: 0 40px;
+            transition: opacity 1.5s ease;
+        }
+
+        @keyframes gradient-shift {
+
+            0%,
+            100% {
+                filter: hue-rotate(0deg);
+            }
+
+            50% {
+                filter: hue-rotate(30deg);
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <canvas id="canvas"></canvas>
+
+    <div class="info-container">
+        <div class="title">Collatz 轨迹图：3n+1猜想</div>
+        <div class="subtitle" id="collatzInfo" style="font-size: 0.95em;">起始数: 1 | 已测试: 0</div>
+        <div class="stats">
+            <div class="stat-item">
+                <div>当前数</div>
+                <div class="stat-value" id="currentNumber">1</div>
+            </div>
+            <div class="stat-item">
+                <div>步数</div>
+                <div class="stat-value" id="steps">0</div>
+            </div>
+            <div class="stat-item">
+                <div>峰值</div>
+                <div class="stat-value" id="maxValue">1</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="center-highlight">
+        规则：偶数÷2，奇数×3+1 → 最终都会回到1吗？
+    </div>
+
+    <div class="quote"></div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+
+        // 设置画布大小
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        // Collatz序列生成
+        function collatzSequence(n) {
+            const sequence = [n];
+            let current = n;
+            let maxVal = n;
+
+            while (current !== 1) {
+                if (current % 2 === 0) {
+                    current = current / 2;
+                } else {
+                    current = current * 3 + 1;
+                }
+                sequence.push(current);
+                if (current > maxVal) maxVal = current;
+            }
+
+            return { sequence, maxVal, steps: sequence.length - 1 };
+        }
+
+        // 轨迹类
+        class CollatzPath {
+            constructor(startNumber) {
+                this.startNumber = startNumber;
+                const result = collatzSequence(startNumber);
+                this.sequence = result.sequence;
+                this.maxValue = result.maxVal;
+                this.steps = result.steps;
+                this.currentIndex = 0;
+                this.points = [];
+                this.opacity = 1;
+                this.hue = (startNumber * 37) % 360;
+                this.finished = false;
+                this.fadeOut = false;
+            }
+
+            update() {
+                if (this.currentIndex < this.sequence.length) {
+                    const value = this.sequence[this.currentIndex];
+                    const progress = this.currentIndex / this.sequence.length;
+
+                    // 优化后的位置计算 - 下移
+                    const x = canvas.width * 0.12 + (canvas.width * 0.76) * progress;
+                    const maxHeight = canvas.height * 0.45;
+                    const logMax = Math.log10(this.maxValue + 1);
+                    const logVal = Math.log10(value + 1);
+                    const y = canvas.height * 0.6 - (logVal / logMax) * maxHeight;
+
+                    this.points.push({ x, y, value });
+                    this.currentIndex++;
+
+                    if (this.currentIndex >= this.sequence.length) {
+                        this.finished = true;
+                        setTimeout(() => { this.fadeOut = true; }, 1000);
+                    }
+                } else if (this.fadeOut) {
+                    this.opacity -= 0.02;
+                }
+            }
+
+            draw() {
+                if (this.points.length < 2) return;
+
+                ctx.save();
+                ctx.globalAlpha = this.opacity;
+
+                // 绘制路径
+                const saturation = 85;
+                const lightness = 55;
+                const color = `hsl(${this.hue}, ${saturation}%, ${lightness}%)`;
+
+                // 绘制线条
+                ctx.strokeStyle = color;
+                ctx.lineWidth = 2.5;
+                ctx.shadowBlur = 12;
+                ctx.shadowColor = color;
+                ctx.lineJoin = 'round';
+                ctx.lineCap = 'round';
+
+                ctx.beginPath();
+                for (let i = 0; i < this.points.length; i++) {
+                    const point = this.points[i];
+                    if (i === 0) {
+                        ctx.moveTo(point.x, point.y);
+                    } else {
+                        ctx.lineTo(point.x, point.y);
+                    }
+                }
+                ctx.stroke();
+
+                // 当前位置高亮
+                if (!this.finished && this.points.length > 0) {
+                    const lastPoint = this.points[this.points.length - 1];
+                    ctx.fillStyle = 'white';
+                    ctx.shadowBlur = 20;
+                    ctx.shadowColor = color;
+                    ctx.beginPath();
+                    ctx.arc(lastPoint.x, lastPoint.y, 4, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    // 显示当前值（位置优化）
+                    if (lastPoint.y > canvas.height * 0.4) {
+                        ctx.shadowBlur = 0;
+                        ctx.fillStyle = 'white';
+                        ctx.font = 'bold 12px Arial';
+                        ctx.textAlign = 'center';
+                        ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
+                        ctx.lineWidth = 3;
+                        ctx.strokeText(lastPoint.value, lastPoint.x, lastPoint.y - 12);
+                        ctx.fillText(lastPoint.value, lastPoint.x, lastPoint.y - 12);
+                    }
+                }
+
+                // 起始点标记（仅在开始时显示）
+                if (this.points.length > 0 && this.currentIndex < 5) {
+                    const firstPoint = this.points[0];
+                    ctx.shadowBlur = 0;
+                    ctx.fillStyle = color;
+                    ctx.font = 'bold 13px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
+                    ctx.lineWidth = 3;
+                    ctx.strokeText('起点:' + this.startNumber, firstPoint.x, firstPoint.y + 20);
+                    ctx.fillText('起点:' + this.startNumber, firstPoint.x, firstPoint.y + 20);
+                }
+
+                ctx.restore();
+            }
+
+            isDead() {
+                return this.opacity <= 0;
+            }
+        }
+
+        // 路径管理
+        let paths = [];
+        let currentStartNumber = 1;
+        let testedNumbers = 0;
+        let currentPath = null;
+
+        // 粒子类
+        class Particle {
+            constructor(x, y, color) {
+                this.x = x;
+                this.y = y;
+                this.vx = (Math.random() - 0.5) * 4;
+                this.vy = (Math.random() - 0.5) * 4;
+                this.size = Math.random() * 3 + 1;
+                this.color = color;
+                this.life = 1;
+                this.decay = Math.random() * 0.02 + 0.01;
+            }
+
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                this.life -= this.decay;
+            }
+
+            draw() {
+                ctx.save();
+                ctx.globalAlpha = this.life;
+                ctx.fillStyle = this.color;
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+
+        const particles = [];
+
+        // 生成粒子
+        function generateParticles(x, y, count, color) {
+            for (let i = 0; i < count; i++) {
+                particles.push(new Particle(x, y, color));
+            }
+        }
+
+        // 更新粒子
+        function updateParticles() {
+            for (let i = particles.length - 1; i >= 0; i--) {
+                particles[i].update();
+                particles[i].draw();
+
+                if (particles[i].life <= 0) {
+                    particles.splice(i, 1);
+                }
+            }
+        }
+
+        // 绘制坐标轴和网格
+        function drawGrid() {
+            ctx.save();
+            ctx.strokeStyle = 'rgba(100, 200, 255, 0.08)';
+            ctx.lineWidth = 1;
+
+            // 水平网格线（减少数量）- 整体下移
+            for (let i = 0; i <= 5; i++) {
+                const y = canvas.height * 0.35 + (canvas.height * 0.5 / 5) * i;
+                ctx.beginPath();
+                ctx.moveTo(canvas.width * 0.12, y);
+                ctx.lineTo(canvas.width * 0.88, y);
+                ctx.stroke();
+            }
+
+            // 中心线（y=1）更明显
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
+            ctx.lineWidth = 1.5;
+            ctx.setLineDash([8, 4]);
+            ctx.beginPath();
+            const centerY = canvas.height * 0.6;
+            ctx.moveTo(canvas.width * 0.12, centerY);
+            ctx.lineTo(canvas.width * 0.88, centerY);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            // 简洁的标签
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+            ctx.font = '11px Arial';
+            ctx.textAlign = 'right';
+            ctx.fillText('高', canvas.width * 0.1, canvas.height * 0.38);
+            ctx.fillText('1', canvas.width * 0.1, centerY + 4);
+
+            ctx.restore();
+        }
+
+        // 更新统计显示
+        function updateStatsDisplay() {
+            if (currentPath) {
+                const current = currentPath.sequence[currentPath.currentIndex - 1] || currentPath.startNumber;
+                document.getElementById('currentNumber').textContent = current > 1e6 ? current.toExponential(1) : current;
+                document.getElementById('steps').textContent = currentPath.currentIndex;
+                document.getElementById('maxValue').textContent = currentPath.maxValue > 1e6 ?
+                    currentPath.maxValue.toExponential(1) : currentPath.maxValue;
+                document.getElementById('collatzInfo').textContent = `起始数: ${currentPath.startNumber} | 已测试: ${testedNumbers}`;
+            }
+        }
+
+        // 主动画循环
+        let lastTime = 0;
+        const pathUpdateInterval = 50; // 每50ms更新一步
+
+        function animate(currentTime) {
+            // 清空画布（增加拖尾效果）
+            ctx.fillStyle = 'rgba(15, 10, 26, 0.25)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // 绘制网格
+            drawGrid();
+
+            // 创建新路径
+            if (!currentPath || currentPath.finished) {
+                if (currentPath && currentPath.finished) {
+                    testedNumbers++;
+                    currentStartNumber++;
+
+                    // 生成完成粒子效果
+                    const lastPoint = currentPath.points[currentPath.points.length - 1];
+                    if (lastPoint) {
+                        const color = `hsl(${currentPath.hue}, 80%, 60%)`;
+                        generateParticles(lastPoint.x, lastPoint.y, 15, color);
+                    }
+                }
+
+                currentPath = new CollatzPath(currentStartNumber);
+                paths.push(currentPath);
+            }
+
+            // 更新当前路径
+            if (currentTime - lastTime > pathUpdateInterval) {
+                if (currentPath && !currentPath.finished) {
+                    currentPath.update();
+                }
+                lastTime = currentTime;
+            }
+
+            // 更新和绘制所有路径
+            for (let i = paths.length - 1; i >= 0; i--) {
+                paths[i].draw();
+
+                if (paths[i].fadeOut) {
+                    paths[i].opacity -= 0.01;
+                }
+
+                if (paths[i].isDead()) {
+                    paths.splice(i, 1);
+                }
+            }
+
+            // 更新粒子
+            updateParticles();
+
+            // 更新显示
+            updateStatsDisplay();
+
+            requestAnimationFrame(animate);
+        }
+
+        // 启动动画
+        animate(0);
+
+        // 字幕系统
+        const subtitles = [
+            "Collatz猜想：数学界最神秘的未解之谜之一",
+            "规则很简单：偶数除以2，奇数乘3加1",
+            "例如从7开始：7→22→11→34→17→52→26→13...",
+            "最终总会回到：...→4→2→1",
+            "无论从哪个数开始，真的都会回到1吗？",
+            "数学家们测试到了2^68，都成立",
+            "但没人能证明对所有数都成立",
+            "屏幕上每条光带是一个数字的完整轨迹",
+            "轨迹的高度代表数值的大小",
+            "横向代表从起点到终点1的进度",
+            "有些数很快就到1，有些要经历漫长旅程",
+            "27这个数要经过111步才能到达1",
+            "途中最大值达到9232！",
+            "轨迹像瀑布一样不断坠落向1",
+            "为什么所有数最终都会坠落到1？",
+            "这个简单问题困扰数学家几十年",
+            "也许答案就藏在这些光带的舞蹈中",
+            "数学之美在于：简单规则，无穷奥秘"
+        ];
+
+        const quoteDiv = document.querySelector('.quote');
+        let subtitleIndex = 0;
+
+        function fitSubtitleToOneLine() {
+            const padding = 80;
+            const maxWidth = window.innerWidth - padding;
+            const base = window.innerWidth < 768 ? 32 : 38;
+            const min = window.innerWidth < 768 ? 26 : 30;
+            let size = base;
+            quoteDiv.style.fontSize = size + 'px';
+            while (quoteDiv.scrollWidth > maxWidth && size > min) {
+                size -= 1;
+                quoteDiv.style.fontSize = size + 'px';
+            }
+        }
+
+        function setSubtitleText(text) {
+            quoteDiv.style.fontSize = '';
+            quoteDiv.textContent = text;
+            fitSubtitleToOneLine();
+        }
+
+        function fadeIn() {
+            requestAnimationFrame(() => { quoteDiv.style.opacity = 1; });
+        }
+
+        function fadeOut(callback) {
+            quoteDiv.style.opacity = 0;
+            setTimeout(callback, 1000);
+        }
+
+        // 初始显示
+        quoteDiv.style.opacity = 0;
+        setTimeout(() => {
+            setSubtitleText(subtitles[subtitleIndex]);
+            fadeIn();
+        }, 1200);
+
+        // 字幕轮换
+        function rotateSubtitle() {
+            fadeOut(() => {
+                subtitleIndex = (subtitleIndex + 1) % subtitles.length;
+                setSubtitleText(subtitles[subtitleIndex]);
+                fadeIn();
+            });
+        }
+
+        setInterval(rotateSubtitle, 5500);
+        window.addEventListener('resize', () => {
+            resizeCanvas();
+            fitSubtitleToOneLine();
+        });
+    </script>
+</body>
+
+</html>

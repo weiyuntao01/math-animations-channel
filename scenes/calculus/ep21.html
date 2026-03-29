@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hilbert 曲线 · 填满屏幕的智慧</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #000815 0%, #001122 50%, #000a1a 100%);
+            overflow: hidden; position: relative; height: 100vh;
+        }
+        #canvas { display: block; }
+        
+        .wisdom {
+            position: absolute; left: 50%; top: 50%; 
+            transform: translate(-50%, -50%);
+            color: rgba(255, 255, 255, 0.95); 
+            font-size: 48px; font-weight: 600;
+            line-height: 1.4; letter-spacing: 2px;
+            text-align: center; 
+            user-select: none; pointer-events: none;
+            z-index: 9999; 
+            text-shadow:
+                0 0 5px rgba(0, 200, 255, 0.8),
+                0 0 20px rgba(0, 150, 255, 0.5),
+                0 0 40px rgba(0, 100, 200, 0.3);
+            transition: opacity 2s ease, transform 2s ease;
+            max-width: 90vw;
+            white-space: nowrap;
+        }
+        
+        @media (max-width: 768px) {
+            .wisdom { font-size: 32px; letter-spacing: 1px; }
+        }
+        
+        @media (max-width: 480px) {
+            .wisdom { font-size: 24px; letter-spacing: 0.5px; }
+        }
+    </style>
+</head>
+<body>
+    <canvas id="canvas"></canvas>
+    <div class="wisdom">愿星光所至，皆为同一山河</div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        let animationTime = 0;
+        let currentLevel = 1;
+        let drawProgress = 0;
+        
+        // Hilbert曲线生成器
+        class HilbertCurve {
+            constructor() {
+                this.points = [];
+            }
+            
+            // 生成指定阶数的Hilbert曲线
+            generate(level) {
+                this.points = [];
+                const size = Math.pow(2, level);
+                
+                for (let i = 0; i < size * size; i++) {
+                    const point = this.hilbertIndex(i, level);
+                    this.points.push(point);
+                }
+                
+                return this.points;
+            }
+            
+            // 将线性索引转换为Hilbert曲线上的点
+            hilbertIndex(index, level) {
+                let x = 0, y = 0;
+                let s = 1;
+                let t = index;
+                
+                while (s < Math.pow(2, level)) {
+                    const rx = 1 & (t / 2);
+                    const ry = 1 & (t ^ rx);
+                    
+                    if (ry === 0) {
+                        if (rx === 1) {
+                            x = s - 1 - x;
+                            y = s - 1 - y;
+                        }
+                        [x, y] = [y, x];
+                    }
+                    
+                    x += s * rx;
+                    y += s * ry;
+                    t = Math.floor(t / 4);
+                    s *= 2;
+                }
+                
+                return { x, y };
+            }
+            
+            // 获取标准化的点（0-1范围）
+            getNormalizedPoints(level) {
+                const points = this.generate(level);
+                const size = Math.pow(2, level) - 1;
+                
+                return points.map(point => ({
+                    x: point.x / size,
+                    y: point.y / size
+                }));
+            }
+        }
+        
+        const hilbert = new HilbertCurve();
+        let currentPoints = [];
+        let targetPoints = [];
+        let isTransitioning = false;
+        
+        // 屏幕坐标转换
+        function toScreenCoords(normalizedPoint) {
+            const margin = Math.min(canvas.width, canvas.height) * 0.1;
+            const size = Math.min(canvas.width, canvas.height) - 2 * margin;
+            
+            return {
+                x: margin + normalizedPoint.x * size + (canvas.width - size - 2 * margin) / 2,
+                y: margin + normalizedPoint.y * size + (canvas.height - size - 2 * margin) / 2
+            };
+        }
+        
+        // 绘制背景
+        function drawBackground() {
+            ctx.fillStyle = 'rgba(0, 8, 21, 0.1)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+        
+        // 绘制Hilbert曲线
+        function drawHilbertCurve() {
+            if (currentPoints.length === 0) return;
+            
+            ctx.save();
+            
+            // 计算要绘制的点数
+            const totalPoints = currentPoints.length;
+            const pointsToDraw = Math.floor(drawProgress * totalPoints);
+            
+            if (pointsToDraw < 2) {
+                ctx.restore();
+                return;
+            }
+            
+            // 绘制曲线主体
+            ctx.strokeStyle = 'rgba(0, 150, 255, 0.8)';
+            ctx.lineWidth = 3;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = 'rgba(0, 150, 255, 0.5)';
+            
+            ctx.beginPath();
+            for (let i = 0; i < pointsToDraw; i++) {
+                const screenPoint = toScreenCoords(currentPoints[i]);
+                if (i === 0) {
+                    ctx.moveTo(screenPoint.x, screenPoint.y);
+                } else {
+                    ctx.lineTo(screenPoint.x, screenPoint.y);
+                }
+            }
+            ctx.stroke();
+            
+            // 绘制发光轨迹
+            ctx.strokeStyle = 'rgba(0, 200, 255, 0.3)';
+            ctx.lineWidth = 8;
+            ctx.shadowBlur = 20;
+            ctx.shadowColor = 'rgba(0, 200, 255, 0.3)';
+            
+            ctx.beginPath();
+            for (let i = 0; i < pointsToDraw; i++) {
+                const screenPoint = toScreenCoords(currentPoints[i]);
+                if (i === 0) {
+                    ctx.moveTo(screenPoint.x, screenPoint.y);
+                } else {
+                    ctx.lineTo(screenPoint.x, screenPoint.y);
+                }
+            }
+            ctx.stroke();
+            
+            // 绘制当前点的光晕效果
+            if (pointsToDraw > 0 && pointsToDraw < totalPoints) {
+                const currentPoint = toScreenCoords(currentPoints[pointsToDraw - 1]);
+                const pulse = Math.sin(animationTime * 10) * 0.3 + 1;
+                
+                // 外层光晕
+                const gradient1 = ctx.createRadialGradient(
+                    currentPoint.x, currentPoint.y, 0,
+                    currentPoint.x, currentPoint.y, 40 * pulse
+                );
+                gradient1.addColorStop(0, 'rgba(0, 255, 255, 0.6)');
+                gradient1.addColorStop(0.5, 'rgba(0, 200, 255, 0.3)');
+                gradient1.addColorStop(1, 'rgba(0, 150, 255, 0)');
+                ctx.fillStyle = gradient1;
+                ctx.beginPath();
+                ctx.arc(currentPoint.x, currentPoint.y, 40 * pulse, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // 内层亮点
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+                ctx.shadowBlur = 30;
+                ctx.shadowColor = 'rgba(0, 255, 255, 0.8)';
+                ctx.beginPath();
+                ctx.arc(currentPoint.x, currentPoint.y, 6 * pulse, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            
+            // 绘制已完成部分的粒子效果
+            if (drawProgress > 0.3) {
+                for (let i = 0; i < pointsToDraw; i += 10) {
+                    const screenPoint = toScreenCoords(currentPoints[i]);
+                    const sparkle = Math.sin(animationTime * 3 + i * 0.1) * 0.5 + 0.5;
+                    
+                    if (sparkle > 0.6) {
+                        const alpha = sparkle * 0.4;
+                        const size = 2 + sparkle * 3;
+                        
+                        ctx.fillStyle = `rgba(0, 200, 255, ${alpha})`;
+                        ctx.shadowBlur = 15;
+                        ctx.shadowColor = `rgba(0, 200, 255, ${alpha})`;
+                        ctx.beginPath();
+                        ctx.arc(screenPoint.x, screenPoint.y, size, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                }
+            }
+            
+            ctx.restore();
+        }
+        
+        // 动画逻辑
+        const maxLevel = 7; // 最大阶数
+        // 每个级别的持续时间（秒）- 1、2阶更快
+        const levelDurations = [2, 3, 6, 6, 6, 6, 6]; // 索引0对应1阶，索引1对应2阶，以此类推
+        let animationCompleted = false;
+        
+        // 计算累积时间
+        function getCumulativeTime(level) {
+            let total = 0;
+            for (let i = 0; i < level; i++) {
+                total += levelDurations[i];
+            }
+            return total;
+        }
+        
+        function animate() {
+            try {
+                if (animationCompleted) {
+                    return; // 动画已完成，停止
+                }
+                
+                drawBackground();
+                animationTime += 0.016;
+                
+                // 初始化第一个级别
+                if (currentPoints.length === 0) {
+                    currentLevel = 1;
+                    currentPoints = hilbert.getNormalizedPoints(1);
+                    drawProgress = 0;
+                }
+                
+                // 计算当前应该显示的级别
+                let targetLevel = 1;
+                for (let i = 1; i <= maxLevel; i++) {
+                    if (animationTime >= getCumulativeTime(i - 1)) {
+                        targetLevel = i;
+                    }
+                }
+                
+                // 检查是否需要升级
+                if (targetLevel !== currentLevel && !isTransitioning) {
+                    currentLevel = targetLevel;
+                    targetPoints = hilbert.getNormalizedPoints(currentLevel);
+                    isTransitioning = true;
+                    drawProgress = 0;
+                }
+                
+                // 过渡动画
+                if (isTransitioning) {
+                    currentPoints = targetPoints;
+                    isTransitioning = false;
+                }
+                
+                // 绘制进度动画
+                const levelStartTime = getCumulativeTime(currentLevel - 1);
+                const timeInCurrentLevel = animationTime - levelStartTime;
+                const currentLevelDuration = levelDurations[currentLevel - 1];
+                const drawSpeed = 0.8; // 绘制速度
+                drawProgress = Math.min(1, (timeInCurrentLevel / currentLevelDuration) * (1 + drawSpeed));
+                
+                // 检查动画是否完成
+                if (currentLevel === maxLevel && drawProgress >= 1) {
+                    animationCompleted = true;
+                    drawProgress = 1; // 确保完全绘制
+                }
+                
+                drawHilbertCurve();
+                
+                // 只有在动画未完成时才继续
+                if (!animationCompleted) {
+                    requestAnimationFrame(animate);
+                }
+                
+            } catch (error) {
+                console.error('Animation error:', error);
+                if (!animationCompleted) {
+                    requestAnimationFrame(animate);
+                }
+            }
+        }
+        
+        // 启动动画
+        ctx.fillStyle = 'rgba(0, 8, 21, 1)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        animate();
+    </script>
+</body>
+</html>

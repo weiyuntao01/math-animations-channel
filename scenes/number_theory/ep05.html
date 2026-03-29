@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EP02 - 数字根舞池：mod 9 的魔法</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #1a0a2e 0%, #2d1b3d 50%, #3d2a4e 100%);
+            overflow: hidden;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        .info-container {
+            position: fixed;
+            top: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            text-align: center;
+            z-index: 10;
+            color: white;
+            text-shadow: 0 0 20px rgba(255, 255, 255, 0.5);
+        }
+
+        .title {
+            font-size: 2.5em;
+            font-weight: bold;
+            margin-bottom: 10px;
+            background: linear-gradient(45deg, #ff6b9d, #c06bff, #6bb5ff, #6bffb5);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: gradient-shift 4s ease infinite;
+            background-size: 200% 200%;
+        }
+
+        .subtitle {
+            font-size: 1.2em;
+            color: #88ccff;
+            margin-bottom: 20px;
+        }
+
+        .current-number {
+            font-size: 3em;
+            font-weight: bold;
+            color: #ffff00;
+            text-shadow: 0 0 30px rgba(255, 255, 0, 0.8);
+            margin: 10px 0;
+            animation: pulse 1s ease-in-out;
+        }
+
+        .calculation {
+            font-size: 1.3em;
+            color: #aaddff;
+            margin-top: 10px;
+        }
+
+        .stats {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            font-size: 0.9em;
+            color: #ccccff;
+            margin-top: 15px;
+        }
+
+        .stat-item {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 8px 15px;
+            border-radius: 10px;
+            backdrop-filter: blur(10px);
+        }
+
+        .stat-value {
+            font-size: 1.3em;
+            font-weight: bold;
+            color: #00ffff;
+        }
+
+        .quote {
+            position: absolute;
+            left: 50%;
+            bottom: 70px;
+            transform: translateX(-50%);
+            max-width: 85vw;
+            white-space: nowrap;
+            overflow: hidden;
+            color: rgba(255, 255, 255, 0.98);
+            font-size: 38px;
+            font-weight: 500;
+            line-height: 1.6;
+            letter-spacing: 0.5px;
+            -webkit-text-stroke: 0.5px rgba(255, 105, 180, 0.3);
+            text-shadow:
+                0 0 2px rgba(255, 105, 180, 0.6),
+                0 0 12px rgba(255, 105, 180, 0.4),
+                0 2px 10px rgba(0, 0, 0, 0.8);
+            text-align: center;
+            user-select: none;
+            pointer-events: none;
+            z-index: 9999;
+            padding: 0 40px;
+            transition: opacity 1.5s ease;
+        }
+
+        @keyframes gradient-shift {
+
+            0%,
+            100% {
+                background-position: 0% 50%;
+            }
+
+            50% {
+                background-position: 100% 50%;
+            }
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                transform: scale(1);
+                opacity: 1;
+            }
+
+            50% {
+                transform: scale(1.1);
+                opacity: 0.9;
+            }
+        }
+
+        @keyframes glow {
+
+            0%,
+            100% {
+                box-shadow: 0 0 20px currentColor;
+            }
+
+            50% {
+                box-shadow: 0 0 40px currentColor, 0 0 60px currentColor;
+            }
+        }
+
+        .position-highlight {
+            animation: glow 1s ease-in-out;
+        }
+    </style>
+</head>
+
+<body>
+    <canvas id="canvas"></canvas>
+
+    <div class="info-container">
+        <div class="title">数字根舞池：mod 9 的魔法</div>
+        <div class="subtitle">每个数字都有自己的归宿</div>
+        <div class="current-number" id="currentNumber">-</div>
+        <div class="calculation" id="calculation">-</div>
+        <div class="stats">
+            <div class="stat-item">
+                <div>已测试</div>
+                <div class="stat-value" id="testedCount">0</div>
+            </div>
+            <div class="stat-item">
+                <div>当前位置</div>
+                <div class="stat-value" id="currentPos">-</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="quote"></div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+
+        // 设置画布大小
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        // 9个位置的颜色
+        const colors = [
+            '#FF6B6B', // 1 - 红色
+            '#4ECDC4', // 2 - 青色
+            '#45B7D1', // 3 - 蓝色
+            '#FFA07A', // 4 - 橙色
+            '#98D8C8', // 5 - 薄荷绿
+            '#F7DC6F', // 6 - 黄色
+            '#BB8FCE', // 7 - 紫色
+            '#85C1E2', // 8 - 天蓝
+            '#F8B739'  // 9 - 金色
+        ];
+
+        // 舞池位置配置
+        const centerX = canvas.width / 2;
+        const centerY = canvas.height / 2;
+        const radius = Math.min(canvas.width, canvas.height) * 0.28;
+
+        // 粒子系统
+        const particles = [];
+        const trails = [];
+
+        // 动画状态
+        let currentNumber = 1;
+        let testedCount = 0;
+        let animationPhase = 0; // 0: 展示数字, 1: 计算过程, 2: 跳到位置
+
+        // 粒子类
+        class Particle {
+            constructor(x, y, color, targetX, targetY) {
+                this.x = x;
+                this.y = y;
+                this.targetX = targetX;
+                this.targetY = targetY;
+                this.color = color;
+                this.size = Math.random() * 3 + 2;
+                this.life = 1;
+                this.speed = 0.02 + Math.random() * 0.03;
+                this.progress = 0;
+            }
+
+            update() {
+                this.progress += this.speed;
+                if (this.progress > 1) this.progress = 1;
+
+                // 贝塞尔曲线运动
+                const t = this.progress;
+                const controlX = (this.x + this.targetX) / 2 + (Math.random() - 0.5) * 100;
+                const controlY = (this.y + this.targetY) / 2 - 150;
+
+                this.x = (1 - t) * (1 - t) * this.x + 2 * (1 - t) * t * controlX + t * t * this.targetX;
+                this.y = (1 - t) * (1 - t) * this.y + 2 * (1 - t) * t * controlY + t * t * this.targetY;
+
+                this.life = 1 - this.progress;
+            }
+
+            draw() {
+                ctx.save();
+                ctx.globalAlpha = this.life;
+                ctx.fillStyle = this.color;
+                ctx.shadowBlur = 15;
+                ctx.shadowColor = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+
+        // 计算数字根
+        function calculateDigitalRoot(n) {
+            const steps = [];
+            let current = n;
+
+            while (current > 9) {
+                const digits = current.toString().split('').map(Number);
+                const sum = digits.reduce((a, b) => a + b, 0);
+                steps.push(`${current} → ${digits.join('+')} = ${sum}`);
+                current = sum;
+            }
+
+            return {
+                root: current,
+                steps: steps
+            };
+        }
+
+        // 获取位置坐标
+        function getPositionCoords(pos) {
+            const angle = (pos - 1) * (360 / 9) - 90;
+            const radian = angle * Math.PI / 180;
+            return {
+                x: centerX + radius * Math.cos(radian),
+                y: centerY + radius * Math.sin(radian)
+            };
+        }
+
+        // 绘制9个位置
+        function drawPositions() {
+            for (let i = 1; i <= 9; i++) {
+                const pos = getPositionCoords(i);
+
+                // 绘制位置圆圈
+                ctx.save();
+                ctx.fillStyle = colors[i - 1];
+                ctx.shadowBlur = 20;
+                ctx.shadowColor = colors[i - 1];
+
+                // 如果是当前目标位置，放大并加强光效
+                const isTarget = animationPhase === 2 && calculateDigitalRoot(currentNumber).root === i;
+                const size = isTarget ? 50 : 35;
+
+                ctx.beginPath();
+                ctx.arc(pos.x, pos.y, size, 0, Math.PI * 2);
+                ctx.fill();
+
+                // 绘制数字
+                ctx.shadowBlur = 0;
+                ctx.fillStyle = 'white';
+                ctx.font = 'bold 28px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(i, pos.x, pos.y);
+
+                // 绘制标签
+                ctx.font = '14px Arial';
+                ctx.fillStyle = 'rgba(255,255,255,0.8)';
+                ctx.fillText('mod 9', pos.x, pos.y + size + 20);
+
+                ctx.restore();
+            }
+        }
+
+        // 绘制连接线
+        function drawConnections() {
+            ctx.save();
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+            ctx.lineWidth = 1;
+
+            for (let i = 1; i <= 9; i++) {
+                const pos1 = getPositionCoords(i);
+                const pos2 = getPositionCoords((i % 9) + 1);
+
+                ctx.beginPath();
+                ctx.moveTo(pos1.x, pos1.y);
+                ctx.lineTo(pos2.x, pos2.y);
+                ctx.stroke();
+            }
+            ctx.restore();
+        }
+
+        // 生成粒子效果
+        function generateParticles(targetPos) {
+            const target = getPositionCoords(targetPos);
+            const startX = centerX;
+            const startY = centerY - 200;
+
+            for (let i = 0; i < 30; i++) {
+                particles.push(new Particle(
+                    startX + (Math.random() - 0.5) * 50,
+                    startY + (Math.random() - 0.5) * 50,
+                    colors[targetPos - 1],
+                    target.x,
+                    target.y
+                ));
+            }
+        }
+
+        // 更新粒子
+        function updateParticles() {
+            for (let i = particles.length - 1; i >= 0; i--) {
+                particles[i].update();
+                particles[i].draw();
+
+                if (particles[i].life <= 0) {
+                    particles.splice(i, 1);
+                }
+            }
+        }
+
+        // 绘制中心数字
+        function drawCenterNumber() {
+            if (animationPhase === 0 || animationPhase === 1) {
+                ctx.save();
+                ctx.fillStyle = '#ffff00';
+                ctx.shadowBlur = 30;
+                ctx.shadowColor = '#ffff00';
+                ctx.font = 'bold 72px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(currentNumber, centerX, centerY);
+                ctx.restore();
+            }
+        }
+
+        // 更新UI信息
+        function updateInfo() {
+            document.getElementById('currentNumber').textContent = currentNumber;
+            document.getElementById('testedCount').textContent = testedCount;
+
+            const result = calculateDigitalRoot(currentNumber);
+            document.getElementById('currentPos').textContent = result.root;
+
+            if (result.steps.length > 0) {
+                document.getElementById('calculation').textContent = result.steps[result.steps.length - 1];
+            } else {
+                document.getElementById('calculation').textContent = `${currentNumber} 本身就是个位数！`;
+            }
+        }
+
+        // 主动画循环
+        let lastTime = 0;
+        let phaseStartTime = 0;
+        const phaseDurations = [800, 1200, 1500]; // 每个阶段的持续时间
+
+        function animate(currentTime) {
+            // 清空画布
+            ctx.fillStyle = 'rgba(26, 10, 46, 0.4)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // 绘制背景元素
+            drawConnections();
+            drawPositions();
+            drawCenterNumber();
+            updateParticles();
+
+            // 动画状态机
+            if (currentTime - phaseStartTime > phaseDurations[animationPhase]) {
+                animationPhase++;
+                phaseStartTime = currentTime;
+
+                if (animationPhase === 1) {
+                    // 计算阶段
+                    updateInfo();
+                } else if (animationPhase === 2) {
+                    // 跳跃阶段
+                    const result = calculateDigitalRoot(currentNumber);
+                    generateParticles(result.root);
+                } else if (animationPhase > 2) {
+                    // 准备下一个数字
+                    animationPhase = 0;
+                    currentNumber++;
+                    testedCount++;
+
+                    // 循环回到较小的数字，便于演示
+                    if (currentNumber > 100) {
+                        currentNumber = 1;
+                    }
+                }
+            }
+
+            requestAnimationFrame(animate);
+        }
+
+        // 启动动画
+        updateInfo();
+        animate(0);
+
+        // 字幕系统
+        const subtitles = [
+            "什么是数字根？把一个数的各位数字相加",
+            "如果结果大于9，继续相加，直到得到个位数",
+            "例如：38 → 3+8 = 11 → 1+1 = 2",
+            "数字根就是2！",
+            "屏幕上有9个彩色圆圈，代表1到9",
+            "每个数字都会跳到它的数字根位置",
+            "18的数字根是多少？1+8=9，跳到9号位置",
+            "27呢？2+7=9，也跳到9号位置",
+            "所有能被9整除的数，数字根都是9",
+            "45 → 4+5=9，又是9号位置",
+            "这就是mod 9的魔法！",
+            "123 → 1+2+3=6，跳到6号位置",
+            "数字根其实等于这个数除以9的余数",
+            "当余数是0时，数字根就是9",
+            "456 → 4+5+6=15 → 1+5=6",
+            "看，456也跳到了6号位置",
+            "每个数字都有自己的归宿，1到9之间",
+            "这是数学中最美的规律之一",
+            "无论数字多大，最终都会落到这9个位置",
+            "这就是数字根舞池，欢迎来到mod 9的世界！"
+        ];
+
+        const quoteDiv = document.querySelector('.quote');
+        let subtitleIndex = 0;
+
+        function fitSubtitleToOneLine() {
+            const padding = 80;
+            const maxWidth = window.innerWidth - padding;
+            const base = window.innerWidth < 768 ? 32 : 38;
+            const min = window.innerWidth < 768 ? 26 : 30;
+            let size = base;
+            quoteDiv.style.fontSize = size + 'px';
+            while (quoteDiv.scrollWidth > maxWidth && size > min) {
+                size -= 1;
+                quoteDiv.style.fontSize = size + 'px';
+            }
+        }
+
+        function setSubtitleText(text) {
+            quoteDiv.style.fontSize = '';
+            quoteDiv.textContent = text;
+            fitSubtitleToOneLine();
+        }
+
+        function fadeIn() {
+            requestAnimationFrame(() => { quoteDiv.style.opacity = 1; });
+        }
+
+        function fadeOut(callback) {
+            quoteDiv.style.opacity = 0;
+            setTimeout(callback, 1000);
+        }
+
+        // 初始显示
+        quoteDiv.style.opacity = 0;
+        setTimeout(() => {
+            setSubtitleText(subtitles[subtitleIndex]);
+            fadeIn();
+        }, 1200);
+
+        // 字幕轮换
+        function rotateSubtitle() {
+            fadeOut(() => {
+                subtitleIndex = (subtitleIndex + 1) % subtitles.length;
+                setSubtitleText(subtitles[subtitleIndex]);
+                fadeIn();
+            });
+        }
+
+        setInterval(rotateSubtitle, 5000);
+        window.addEventListener('resize', () => {
+            resizeCanvas();
+            fitSubtitleToOneLine();
+        });
+    </script>
+</body>
+
+</html>

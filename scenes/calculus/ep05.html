@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>参数龙形线：Dragon Curve</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #000;
+            overflow: hidden;
+            position: relative;
+        }
+
+        #canvas {
+            display: block;
+        }
+
+        .formula-display {
+            position: absolute;
+            top: 40px;
+            left: 60px;
+            color: white;
+            font-size: 24px;
+            font-weight: 200;
+            letter-spacing: 2px;
+            text-shadow: 0 0 20px rgba(255, 255, 255, 0.5);
+        }
+
+        .formula-display .math {
+            font-family: 'Times New Roman', serif;
+            font-style: italic;
+            font-weight: 300;
+        }
+
+        .parameter-display {
+            position: absolute;
+            top: 120px;
+            left: 60px;
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 22px;
+            font-weight: 300;
+        }
+
+        .parameter-value {
+            color: #9c27b0;
+            font-weight: 400;
+            text-shadow: 0 0 10px rgba(156, 39, 176, 0.8);
+        }
+
+        .secondary-param {
+            position: absolute;
+            top: 160px;
+            left: 60px;
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 20px;
+            font-weight: 300;
+        }
+
+        .secondary-value {
+            color: #673ab7;
+            font-weight: 400;
+            text-shadow: 0 0 8px rgba(103, 58, 183, 0.6);
+        }
+
+        .wisdom {
+            position: absolute;
+            left: 60px;
+            right: 60px;
+            bottom: 60px;
+            max-width: 72ch;
+            color: rgba(255, 255, 255, 0.95);
+            font-size: 20px;
+            font-weight: 300;
+            line-height: 1.6;
+            letter-spacing: 0.2px;
+            text-shadow: 0 2px 10px rgba(0, 0, 0, 0.45);
+            user-select: none;
+            pointer-events: none;
+            z-index: 9999;
+        }
+
+        .wisdom div+div {
+            margin-top: 6px;
+            opacity: 0.95;
+        }
+
+        @media (max-width: 768px) {
+            .wisdom {
+                left: 16px;
+                right: 16px;
+                bottom: 24px;
+                font-size: 16px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <canvas id="canvas"></canvas>
+
+    <div class="formula-display">
+        <div class="math">龙形曲线：迭代折叠模式</div>
+    </div>
+    <div class="parameter-display">
+        迭代次数 = <span class="parameter-value" id="iteration-value">1</span>
+    </div>
+    <div class="secondary-param">
+        转折角度 = <span class="secondary-value" id="angle-value">90°</span>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const iterationDisplay = document.getElementById('iteration-value');
+        const angleDisplay = document.getElementById('angle-value');
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        let animationTime = 0;
+        let currentIteration = 1;
+        let currentAngle = 90;
+        let dragonPath = [];
+        let drawProgress = 0;
+
+        // 龙形曲线生成器（使用迭代序列方法）
+        function generateDragonSequence(iterations) {
+            // 龙形曲线的转向序列：1表示右转，-1表示左转
+            let sequence = [1];
+            
+            for (let i = 0; i < iterations; i++) {
+                const newSequence = [...sequence];
+                newSequence.push(1); // 中间添加右转
+                
+                // 镜像反转原序列并取反
+                for (let j = sequence.length - 1; j >= 0; j--) {
+                    newSequence.push(-sequence[j]);
+                }
+                
+                sequence = newSequence;
+            }
+            
+            return sequence;
+        }
+
+        // 根据转向序列生成路径
+        function sequenceToPath(sequence, angle = 90) {
+            const path = [];
+            let x = 0, y = 0;
+            let direction = 0; // 当前方向（度）
+            const stepSize = 10;
+
+            path.push({ x: x, y: y });
+
+            for (let turn of sequence) {
+                // 向前移动
+                const radians = direction * Math.PI / 180;
+                x += stepSize * Math.cos(radians);
+                y += stepSize * Math.sin(radians);
+                path.push({ x: x, y: y });
+                
+                // 转向
+                direction += turn * angle;
+            }
+
+            return path;
+        }
+
+        function drawBackground() {
+            const gradient = ctx.createRadialGradient(
+                canvas.width / 2, canvas.height / 2, 0,
+                canvas.width / 2, canvas.height / 2, Math.max(canvas.width, canvas.height)
+            );
+
+            const hue = (animationTime * 10) % 360;
+            gradient.addColorStop(0, `hsla(${hue + 270}, 50%, 8%, 1)`);
+            gradient.addColorStop(0.4, `hsla(${hue + 290}, 40%, 4%, 1)`);
+            gradient.addColorStop(0.8, `hsla(${hue + 310}, 30%, 2%, 1)`);
+            gradient.addColorStop(1, 'rgba(0, 0, 0, 1)');
+
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+
+        // 居中并缩放路径
+        function centerAndScalePath(path) {
+            if (!path || path.length === 0) return [];
+
+            // 计算边界
+            let minX = Infinity, maxX = -Infinity;
+            let minY = Infinity, maxY = -Infinity;
+
+            for (let point of path) {
+                if (point && typeof point.x === 'number' && typeof point.y === 'number') {
+                    minX = Math.min(minX, point.x);
+                    maxX = Math.max(maxX, point.x);
+                    minY = Math.min(minY, point.y);
+                    maxY = Math.max(maxY, point.y);
+                }
+            }
+
+            // 检查是否有效
+            if (!isFinite(minX) || !isFinite(maxX) || !isFinite(minY) || !isFinite(maxY)) {
+                return [];
+            }
+
+            const width = maxX - minX;
+            const height = maxY - minY;
+            const centerX = (minX + maxX) / 2;
+            const centerY = (minY + maxY) / 2;
+
+            // 计算缩放比例，避免除以零
+            const maxSize = Math.min(canvas.width * 0.6, canvas.height * 0.6);
+            const safeWidth = Math.max(width, 1);
+            const safeHeight = Math.max(height, 1);
+            const scale = Math.min(maxSize / safeWidth, maxSize / safeHeight);
+
+            // 转换坐标
+            return path.map(point => {
+                if (!point || typeof point.x !== 'number' || typeof point.y !== 'number') {
+                    return { x: canvas.width / 2, y: canvas.height / 2 };
+                }
+                return {
+                    x: canvas.width / 2 + (point.x - centerX) * scale,
+                    y: canvas.height / 2 + (point.y - centerY) * scale
+                };
+            });
+        }
+
+        // 绘制龙形曲线
+        function drawDragonCurve() {
+            if (!dragonPath || dragonPath.length < 2) return;
+
+            const drawCount = Math.min(Math.floor(dragonPath.length * drawProgress), dragonPath.length - 1);
+
+            ctx.save();
+
+            // 绘制已完成的部分
+            if (drawCount > 1) {
+                for (let i = 1; i < drawCount; i++) {
+                    const point = dragonPath[i];
+                    const prevPoint = dragonPath[i - 1];
+                    
+                    if (!point || !prevPoint) continue;
+
+                    const progress = i / dragonPath.length;
+
+                    // 颜色从紫色渐变到蓝色
+                    const hue = 270 + progress * 60;
+                    const alpha = 0.5 + progress * 0.4;
+                    const width = 1.5 + progress * 2;
+
+                    ctx.strokeStyle = `hsla(${hue}, 80%, 60%, ${alpha})`;
+                    ctx.lineWidth = width;
+                    ctx.lineCap = 'round';
+
+                    // 添加发光效果
+                    ctx.shadowBlur = width * 3;
+                    ctx.shadowColor = `hsla(${hue}, 80%, 60%, ${alpha * 0.4})`;
+
+                    ctx.beginPath();
+                    ctx.moveTo(prevPoint.x, prevPoint.y);
+                    ctx.lineTo(point.x, point.y);
+                    ctx.stroke();
+                }
+            }
+
+            // 绘制当前正在绘制的线段（高亮）
+            if (drawCount > 0 && drawCount < dragonPath.length) {
+                const currentPoint = dragonPath[drawCount];
+                const prevPoint = dragonPath[drawCount - 1];
+
+                if (currentPoint && prevPoint) {
+                    const pulse = Math.sin(animationTime * 15) * 0.4 + 1;
+
+                    ctx.strokeStyle = '#ffffff';
+                    ctx.lineWidth = 4 * pulse;
+                    ctx.shadowBlur = 30 * pulse;
+                    ctx.shadowColor = '#ffffff';
+
+                    ctx.beginPath();
+                    ctx.moveTo(prevPoint.x, prevPoint.y);
+                    ctx.lineTo(currentPoint.x, currentPoint.y);
+                    ctx.stroke();
+
+                    // 绘制当前点
+                    ctx.fillStyle = '#9c27b0';
+                    ctx.shadowBlur = 20 * pulse;
+                    ctx.shadowColor = '#9c27b0';
+                    ctx.beginPath();
+                    ctx.arc(currentPoint.x, currentPoint.y, 6 * pulse, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+
+            ctx.restore();
+        }
+
+        // 绘制参考网格
+        function drawGrid() {
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+            const gridSize = 60;
+
+            ctx.save();
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.03)';
+            ctx.lineWidth = 1;
+
+            // 垂直线
+            for (let x = centerX % gridSize; x < canvas.width; x += gridSize) {
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, canvas.height);
+                ctx.stroke();
+            }
+
+            // 水平线
+            for (let y = centerY % gridSize; y < canvas.height; y += gridSize) {
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(canvas.width, y);
+                ctx.stroke();
+            }
+
+            ctx.restore();
+        }
+
+        // 显示龙形曲线说明
+        function drawDescription() {
+            const centerX = canvas.width / 2;
+            const topY = 250;
+
+            ctx.save();
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+            ctx.font = '16px monospace';
+            ctx.textAlign = 'center';
+
+            const description = [
+                '龙形曲线生成规则：',
+                '每次迭代在中心折叠',
+                '形成自相似的分形图案'
+            ];
+
+            description.forEach((text, index) => {
+                ctx.fillText(text, centerX, topY + index * 25);
+            });
+
+            ctx.restore();
+        }
+
+        function animate() {
+            try {
+                drawBackground();
+                drawGrid();
+
+                animationTime += 0.016;
+
+                // 动态变化迭代次数
+                const iterationCycle = Math.sin(animationTime * 0.08) * 0.5 + 0.5;
+                currentIteration = Math.floor(iterationCycle * 10) + 1; // 1-11次迭代
+
+                // 角度在85-95度之间微调
+                const angleCycle = Math.sin(animationTime * 0.15) * 0.5 + 0.5;
+                currentAngle = 85 + angleCycle * 10;
+
+                // 限制迭代次数以保证性能
+                const safeIteration = Math.min(currentIteration, 12);
+
+                // 生成当前参数下的龙形曲线
+                const sequence = generateDragonSequence(safeIteration);
+                const rawPath = sequenceToPath(sequence, currentAngle);
+                dragonPath = centerAndScalePath(rawPath);
+
+                // 绘制进度动画
+                drawProgress += 0.008;
+                if (drawProgress > 1.1) {
+                    drawProgress = 0;
+                }
+
+                // 更新显示值
+                iterationDisplay.textContent = currentIteration;
+                angleDisplay.textContent = Math.round(currentAngle) + '°';
+
+                // 绘制所有组件
+                drawDragonCurve();
+                drawDescription();
+
+                requestAnimationFrame(animate);
+            } catch (error) {
+                console.error('Animation error:', error);
+                requestAnimationFrame(animate);
+            }
+        }
+
+        animate();
+    </script>
+
+    <div class="wisdom">
+        <div>复杂源于简单规则的不断重复，如同成长路上的每次选择。</div>
+        <div>每一次分岔，都在塑造独一无二的人生轨迹。</div>
+    </div>
+
+</body>
+
+</html>

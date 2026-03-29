@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Möbius万花筒</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #000;
+            overflow: hidden;
+            position: relative;
+        }
+
+        #canvas {
+            display: block;
+        }
+
+        .formula-display {
+            position: absolute;
+            top: 50px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: white;
+            font-size: 26px;
+            font-weight: 200;
+            letter-spacing: 2px;
+            text-shadow: 0 0 20px rgba(255, 255, 255, 0.5);
+            z-index: 100;
+            text-align: center;
+        }
+
+        .formula-display .math {
+            font-family: 'Times New Roman', serif;
+            font-style: italic;
+            font-weight: 300;
+        }
+
+        .parameter-display {
+            position: absolute;
+            top: 110px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 22px;
+            font-weight: 300;
+            z-index: 100;
+        }
+
+        .parameter-value {
+            color: #e91e63;
+            font-weight: 400;
+            text-shadow: 0 0 10px rgba(233, 30, 99, 0.8);
+        }
+
+        .secondary-param {
+            position: absolute;
+            top: 145px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 20px;
+            font-weight: 300;
+            z-index: 100;
+        }
+
+        .secondary-value {
+            color: #ff6b9d;
+            font-weight: 400;
+            text-shadow: 0 0 8px rgba(255, 107, 157, 0.6);
+        }
+
+        .info-panel {
+            position: absolute;
+            top: 50px;
+            right: 60px;
+            color: rgba(255, 255, 255, 0.85);
+            font-size: 16px;
+            font-weight: 300;
+            text-align: right;
+            line-height: 2;
+            z-index: 100;
+        }
+
+        .info-label {
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 14px;
+        }
+
+        .info-value {
+            color: #9c27b0;
+            font-weight: 400;
+            font-size: 18px;
+            text-shadow: 0 0 8px rgba(156, 39, 176, 0.6);
+        }
+
+        .wisdom {
+            position: absolute;
+            left: 60px;
+            right: 60px;
+            bottom: 60px;
+            max-width: 72ch;
+            color: rgba(255, 255, 255, 0.95);
+            font-size: 20px;
+            font-weight: 300;
+            line-height: 1.6;
+            letter-spacing: 0.2px;
+            text-shadow: 0 2px 10px rgba(0, 0, 0, 0.45);
+            user-select: none;
+            pointer-events: none;
+            z-index: 9999;
+        }
+
+        .wisdom div+div {
+            margin-top: 6px;
+            opacity: 0.95;
+        }
+
+        @media (max-width: 768px) {
+            .wisdom {
+                left: 16px;
+                right: 16px;
+                bottom: 24px;
+                font-size: 16px;
+            }
+
+            .info-panel {
+                top: 200px;
+                right: 16px;
+                font-size: 14px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <canvas id="canvas"></canvas>
+
+    <div class="formula-display">
+        <div class="math">Möbius变换: f(z) = (az + b)/(cz + d)</div>
+    </div>
+    <div class="parameter-display">
+        旋转角度 θ = <span class="parameter-value" id="angle-value">0°</span>
+    </div>
+    <div class="secondary-param">
+        对称数 n = <span class="secondary-value" id="symmetry-value">6</span>
+    </div>
+
+    <div class="info-panel">
+        <div class="info-label">拓扑特性</div>
+        <div class="info-value" id="topology-value">单侧曲面</div>
+        <div class="info-label" style="margin-top: 8px;">边界数</div>
+        <div class="info-value">1</div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const angleDisplay = document.getElementById('angle-value');
+        const symmetryDisplay = document.getElementById('symmetry-value');
+        const topologyDisplay = document.getElementById('topology-value');
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        let animationTime = 0;
+        let rotationAngle = 0;
+        let symmetryOrder = 6;
+
+        // Möbius变换参数
+        let mobiusA = { re: 1, im: 0 };
+        let mobiusB = { re: 0, im: 0 };
+        let mobiusC = { re: 0, im: 0 };
+        let mobiusD = { re: 1, im: 0 };
+
+        // 复数运算
+        function complexAdd(a, b) {
+            return { re: a.re + b.re, im: a.im + b.im };
+        }
+
+        function complexMul(a, b) {
+            return {
+                re: a.re * b.re - a.im * b.im,
+                im: a.re * b.im + a.im * b.re
+            };
+        }
+
+        function complexDiv(a, b) {
+            const denom = b.re * b.re + b.im * b.im;
+            return {
+                re: (a.re * b.re + a.im * b.im) / denom,
+                im: (a.im * b.re - a.re * b.im) / denom
+            };
+        }
+
+        // Möbius变换: f(z) = (az + b) / (cz + d)
+        function mobiusTransform(z, a, b, c, d) {
+            const numerator = complexAdd(complexMul(a, z), b);
+            const denominator = complexAdd(complexMul(c, z), d);
+
+            if (Math.abs(denominator.re) < 0.0001 && Math.abs(denominator.im) < 0.0001) {
+                return { re: 0, im: 0 };
+            }
+
+            return complexDiv(numerator, denominator);
+        }
+
+        function drawBackground() {
+            const gradient = ctx.createRadialGradient(
+                canvas.width / 2, canvas.height / 2, 0,
+                canvas.width / 2, canvas.height / 2, Math.max(canvas.width, canvas.height) * 0.7
+            );
+
+            const hue = (animationTime * 5) % 360;
+            gradient.addColorStop(0, `hsla(${hue + 280}, 70%, 8%, 1)`);
+            gradient.addColorStop(0.5, `hsla(${hue + 300}, 60%, 5%, 1)`);
+            gradient.addColorStop(1, 'rgba(10, 0, 20, 1)');
+
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+
+        // 绘制万花筒对称图案
+        function drawKaleidoscope() {
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+
+            ctx.save();
+            ctx.translate(centerX, centerY);
+
+            // 绘制多个对称扇形
+            for (let sector = 0; sector < symmetryOrder; sector++) {
+                ctx.save();
+                ctx.rotate((sector * 2 * Math.PI / symmetryOrder) + rotationAngle);
+
+                // 在每个扇形中绘制Möbius变换后的图案
+                drawMobiusPattern();
+
+                ctx.restore();
+            }
+
+            ctx.restore();
+        }
+
+        // 绘制经过Möbius变换的图案
+        function drawMobiusPattern() {
+            const radius = Math.min(canvas.width, canvas.height) * 0.35;
+            const layers = 8;
+
+            for (let layer = 0; layer < layers; layer++) {
+                const layerRadius = radius * (layer + 1) / layers;
+                const points = 60;
+                const hueBase = (animationTime * 10 + layer * 30) % 360;
+
+                ctx.beginPath();
+
+                for (let i = 0; i <= points; i++) {
+                    const t = (i / points) * Math.PI / symmetryOrder;
+
+                    // 原始点
+                    const x = layerRadius * Math.cos(t);
+                    const y = layerRadius * Math.sin(t);
+
+                    // 应用Möbius变换
+                    const z = { re: x / 200, im: y / 200 };
+                    const transformed = mobiusTransform(z, mobiusA, mobiusB, mobiusC, mobiusD);
+
+                    const newX = transformed.re * 200;
+                    const newY = transformed.im * 200;
+
+                    if (i === 0) {
+                        ctx.moveTo(newX, newY);
+                    } else {
+                        ctx.lineTo(newX, newY);
+                    }
+                }
+
+                // 颜色和发光效果
+                const progress = layer / layers;
+                const hue = hueBase + progress * 60;
+                const saturation = 70 + progress * 20;
+                const lightness = 50 + Math.sin(animationTime * 2 + layer) * 20;
+                const alpha = 0.4 + progress * 0.4;
+
+                ctx.strokeStyle = `hsla(${hue}, ${saturation}%, ${lightness}%, ${alpha})`;
+                ctx.lineWidth = 2 + progress * 2;
+                ctx.lineCap = 'round';
+                ctx.shadowBlur = 15;
+                ctx.shadowColor = `hsla(${hue}, ${saturation}%, ${lightness}%, 0.5)`;
+
+                ctx.stroke();
+            }
+        }
+
+        // 绘制中心Möbius带结构
+        function drawMobiusStrip() {
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+            const stripRadius = 80;
+            const stripWidth = 30;
+            const segments = 100;
+
+            ctx.save();
+            ctx.translate(centerX, centerY);
+
+            // 绘制Möbius带的扭曲效果
+            for (let i = 0; i < segments; i++) {
+                const t = (i / segments) * Math.PI * 2;
+                const nextT = ((i + 1) / segments) * Math.PI * 2;
+
+                // Möbius带参数方程
+                const twist = t / 2; // 半圈扭转
+                const x1 = (stripRadius + stripWidth * Math.cos(twist)) * Math.cos(t + rotationAngle);
+                const y1 = (stripRadius + stripWidth * Math.cos(twist)) * Math.sin(t + rotationAngle);
+
+                const nextTwist = nextT / 2;
+                const x2 = (stripRadius + stripWidth * Math.cos(nextTwist)) * Math.cos(nextT + rotationAngle);
+                const y2 = (stripRadius + stripWidth * Math.cos(nextTwist)) * Math.sin(nextT + rotationAngle);
+
+                // 颜色随位置变化
+                const hue = 280 + (t / (Math.PI * 2)) * 80;
+                const brightness = 0.5 + 0.5 * Math.sin(twist * 2);
+
+                ctx.strokeStyle = `hsla(${hue}, 80%, ${40 + brightness * 30}%, 0.8)`;
+                ctx.lineWidth = 3;
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = `hsla(${hue}, 80%, 60%, 0.4)`;
+
+                ctx.beginPath();
+                ctx.moveTo(x1, y1);
+                ctx.lineTo(x2, y2);
+                ctx.stroke();
+            }
+
+            ctx.restore();
+        }
+
+        // 绘制螺旋粒子
+        function drawSpiralParticles() {
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+            const particleCount = 200;
+
+            ctx.save();
+            ctx.translate(centerX, centerY);
+
+            for (let i = 0; i < particleCount; i++) {
+                const angle = (i / particleCount) * Math.PI * 4 + rotationAngle;
+                const radius = (i / particleCount) * Math.min(canvas.width, canvas.height) * 0.4;
+
+                // 螺旋运动
+                const x = radius * Math.cos(angle);
+                const y = radius * Math.sin(angle);
+
+                // 应用简单的Möbius变换
+                const scale = 1 / (1 + radius / 200);
+                const finalX = x * scale;
+                const finalY = y * scale;
+
+                const progress = i / particleCount;
+                const hue = 260 + progress * 100 + (animationTime * 20) % 360;
+                const size = 2 + Math.sin(animationTime * 3 + i * 0.1) * 1.5;
+                const alpha = 0.3 + progress * 0.5;
+
+                ctx.fillStyle = `hsla(${hue}, 80%, 60%, ${alpha})`;
+                ctx.shadowBlur = size * 3;
+                ctx.shadowColor = `hsla(${hue}, 80%, 60%, ${alpha * 0.6})`;
+
+                ctx.beginPath();
+                ctx.arc(finalX, finalY, size, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            ctx.restore();
+        }
+
+        // 绘制反射线
+        function drawReflectionLines() {
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+            const lineLength = Math.min(canvas.width, canvas.height) * 0.45;
+
+            ctx.save();
+            ctx.translate(centerX, centerY);
+
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([5, 10]);
+
+            for (let i = 0; i < symmetryOrder; i++) {
+                const angle = (i * 2 * Math.PI / symmetryOrder) + rotationAngle;
+
+                ctx.beginPath();
+                ctx.moveTo(0, 0);
+                ctx.lineTo(lineLength * Math.cos(angle), lineLength * Math.sin(angle));
+                ctx.stroke();
+            }
+
+            ctx.setLineDash([]);
+            ctx.restore();
+        }
+
+        function animate() {
+            try {
+                drawBackground();
+
+                animationTime += 0.016;
+
+                // 旋转角度循环
+                rotationAngle += 0.005;
+                if (rotationAngle >= Math.PI * 2) {
+                    rotationAngle = 0;
+                }
+
+                // 对称数周期变化 (3到12之间)
+                const symmetryCycle = Math.sin(animationTime * 0.1) * 0.5 + 0.5;
+                symmetryOrder = Math.floor(3 + symmetryCycle * 9);
+
+                // 动态更新Möbius变换参数
+                const phase = animationTime * 0.2;
+                mobiusA = { re: Math.cos(phase), im: Math.sin(phase) * 0.5 };
+                mobiusB = { re: Math.sin(phase) * 0.3, im: 0 };
+                mobiusC = { re: 0, im: Math.sin(phase) * 0.2 };
+                mobiusD = { re: Math.cos(phase), im: -Math.sin(phase) * 0.5 };
+
+                // 更新显示值
+                angleDisplay.textContent = Math.floor(rotationAngle * 180 / Math.PI) + '°';
+                symmetryDisplay.textContent = symmetryOrder;
+
+                // 绘制所有层
+                drawReflectionLines();
+                drawSpiralParticles();
+                drawMobiusStrip();
+                drawKaleidoscope();
+
+                requestAnimationFrame(animate);
+            } catch (error) {
+                console.error('Animation error:', error);
+                requestAnimationFrame(animate);
+            }
+        }
+
+        animate();
+    </script>
+
+    <div class="wisdom">
+        <div>Möbius带只有一个面，一条边——扭曲改变了拓扑，却保持了连续。</div>
+        <div>万花筒的对称之美，源于镜像的无限重复，如同人生的选择与可能。</div>
+    </div>
+
+</body>
+
+</html>
